@@ -1,8 +1,25 @@
 # Documentation
 
-## 1. Input Data
+## Introduction
 
-### 1.1 Source: robomimic Lift (Proficient-Human), `low_dim_v15.hdf5`
+### Quantum reservoir computing
+
+Reservoir computing is a way to learn from time-dependent data, such as time series, signals or control tasks. The input sequence drives a fixed dynamical system, the *reservoir*, and we only train a simple linear *readout* on top of its state. Classically, the reservoir is a random recurrent neural network called an Echo State Network (ESN). A *quantum* reservoir swaps that network for a set of interacting qubits and uses their measured expectation values as features.
+
+Why bother? First, n qubits live in a 2^n-dimensional state space, so a handful of them might do the job of a much larger classical network (Fujii and Nakajima, 2017, found that 5–7 qubits could rival ESNs with hundreds of nodes). Second, the quantum part is never trained, so there's no costly circuit optimisation. Third, the dissipation that usually hurts quantum hardware becomes useful here: it gives the reservoir its fading memory. Whether all this adds up to a real advantage is still an open question, and that's what this project sets out to test.
+
+### The task: imitating a robot arm
+
+We use the **Lift** task from the robomimic benchmark, where a Franka Panda robot arm picks up a cube from a table. The dataset (`low_dim_v15.hdf5`) has 200 demonstrations recorded by a human operator. At each time step, 19 numbers describe the scene: where the gripper is and how it's oriented, how open its fingers are, and where the cube is relative to the gripper. The target is the operator's action at that step, 7 numbers that say how to move and rotate the gripper and whether to open or close it. In short, the model watches the states so far and must guess what the human did next.
+
+### Why quantum reservoirs for this dataset
+
+This task is a natural fit for reservoir computing. The right action depends not just on the current state but on where we are in the motion (approaching, grasping or lifting), so the model needs memory. The mapping is also partly nonlinear: the gripper command, for example, flips suddenly from "open" to "close" once the gripper reaches the cube, a jump that a weighted sum of the inputs can't reproduce. And with only 19 inputs, the problem is small enough to encode into a few qubits, which makes it a realistic target for today's quantum hardware
+
+
+## Input Data
+
+### Source: robomimic Lift (Proficient-Human), `low_dim_v15.hdf5`
 
 The data comes from robomimic, a framework and benchmark for robot learning from demonstration developed by the Stanford Vision and Learning Lab as part of the ARISE Initiative. robomimic is released under the MIT License (Copyright © 2021 Stanford Vision and Learning Lab).
 
@@ -21,15 +38,15 @@ The data comes from robomimic, a framework and benchmark for robot learning from
 
 **Version note.** The demonstrations were recorded in the robosuite simulator (MuJoCo physics), environment version 1.5.1, as stored in the file's env_args metadata. This is why the file is named `low_dim_v15.hdf5` rather than the `low_dim_v141.hdf5` listed on the v0.3 documentation page. Neither robomimic nor robosuite is a runtime dependency of this project: they were used only to obtain and inspect the original file, and the pipeline reads it directly with h5py.
 
-### 1.2 The task
 
-At the start of each episode the cube is placed at a slightly randomized position on the table. The operator moves the end effector (the gripper) above the cube, descends, closes the gripper, and lifts the cube. An episode counts as successful once the cube is raised above a height threshold.
+### Licensing
 
-- **Control frequency:** 20 Hz, so one time step is 50 ms. A demo of 48 steps (the average) lasts about 2.4 s.
-- **Controller:** Operational Space Control (`OSC_POSE`) in **delta** mode. Each action is a small displacement and rotation of the end effector relative to its current pose, not an absolute target.
-- **Reward:** sparse. The reward is 1 only while the cube is lifted. Every demo ends with 5–6 such success steps (`rewards` and `dones` sum to 5 or 6 per demo).
+| Component | Role in this project | License |
+|---|---|---|
+| robomimic (ARISE-Initiative/robomimic) | Source of the Lift PH dataset and its format | MIT |
+| robosuite (ARISE-Initiative/robosuite) | Simulator that generated the demonstrations | MIT |
 
-### 1.3 Original file structure (HDF5)
+### Original file structure (HDF5)
 
 Besides arrays, HDF5 groups can carry small **metadata attributes** (marked "metadata:" in the tree). They describe the group itself rather than holding training data. This project only reads `env_args`, to confirm the task is `"Lift"`.
 
@@ -74,18 +91,7 @@ demo_101: 43 time steps | robot0_eef_pos (43, 3), robot0_eef_quat (43, 4), robot
 demo_102: 58 time steps | robot0_eef_pos (58, 3), robot0_eef_quat (58, 4), robot0_gripper_qpos (58, 2), object (58, 10), actions (58, 7)
 ```
 
-Dataset-wide statistics:
-
-| Quantity | Value |
-|---|---|
-| Number of demos | 200 (`demo_0` … `demo_199`) |
-| Time steps per demo | min 36, max 64, mean 48.3 |
-| Total time steps | 9,666 |
-| Missing values (NaN) | none |
-
-> **Ordering.** HDF5 lists keys alphabetically (`demo_1, demo_10, demo_100, demo_101, …`), which is the order in the listing above. The loading notebook re-sorts the demos numerically (`demo_0, demo_1, demo_2, …`).
-
-### 1.4 Variables used
+### Variables used
 
 #### Inputs: 19 features per time step (robot and object state)
 
@@ -110,24 +116,9 @@ The learning problem is therefore **behavior cloning as sequence regression**: g
 
 **Redundancy note.** Some inputs are redundant: `grip2cube_*` is an exact linear combination of `cube_*` and `eef_*`, and the two finger coordinates are nearly mirror images, this means the 19 inputs carry fewer than 19 independent degrees of freedom. 
 
-### 1.5 From HDF5 to nested lists (`dataset_generation.ipynb`)
+### From HDF5 to nested lists (`dataset_generation.ipynb`)
 
-The notebook `dataset_generation.ipynb` converts the HDF5 file into plain Python nested lists. It does **no padding and no masking**: every demo keeps its own length. Required packages: `h5py`, `numpy`, `pandas`.
-
-#### Settings
-
-| Setting | Default | Effect |
-|---|---|---|
-| `DATASET` | `~/ionQ/robomimic/datasets/lift/ph/low_dim_v15.hdf5` | Path to the raw file |
-| `N_DEMOS` | `200` | Number of demos to load |
-| `SPLIT` | `None` | `None` = all 200 demos. Alternatively, one of the predefined masks (`"train"`, `"valid"`, `"20_percent_train"`, …) |
-| `RANDOM`, `SEED` | `False`, `0` | Take the first `N_DEMOS` demos in numeric order, or draw them at random with the given seed |
-| `TIME_STARTS_AT` | `1` | Time steps are numbered 1, 2, …, T (set to 0 for 0-based numbering) |
-| `STATE_KEYS` | `eef_pos, eef_quat, gripper_qpos, object` | Observation groups concatenated into the 19 inputs, in this order |
-
-#### What the notebook `dataset_generation.ipynb` does
-
-The notebook opens the HDF5 file, checks that it contains the Lift task, and selects which demos to load (by default all 200, in numeric order). For each demo it joins the four observation groups into one table of 19 input values per time step and takes the 7 action values as targets. Inputs and targets are paired at the same time step: the input is the state the operator saw, and the target is the action they then issued. It then checks that every demo is consistent (matching lengths, 19 inputs and 7 targets per step, no missing values) and saves the result, together with the column names and demo names, to a pickle file (`~/ionQ/lift_lists.pkl` by default).
+The notebook `dataset_generation.ipynb` converts the HDF5 file into plain Python nested lists. It does **no padding and no masking**: every demo keeps its own length. Required packages: `h5py`, `numpy`, `pandas`. It opens the HDF5 file, checks that it contains the Lift task, and selects which demos to load (by default all 200, in numeric order). For each demo it joins the four observation groups into one table of 19 input values per time step and takes the 7 action values as targets. Inputs and targets are paired at the same time step: the input is the state the operator saw, and the target is the action they then issued. It then checks that every demo is consistent (matching lengths, 19 inputs and 7 targets per step, no missing values) and saves the result, together with the column names and demo names, to a pickle file (`~/ionQ/lift_lists.pkl` by default).
 
 #### Resulting structure
 
@@ -155,15 +146,7 @@ inputs : [-0.0905, -0.0152, 1.0118, 0.9972, -0.0072, 0.0740, 0.0019, 0.0208, -0.
 targets: [-0.0, 0.0, 0.0, 0.0038, 0.1482, 0.0145, -1.0]
 ```
 
-### 1.6 Licensing
-
-| Component | Role in this project | License |
-|---|---|---|
-| robomimic (ARISE-Initiative/robomimic) | Source of the Lift PH dataset and its format | MIT |
-| robosuite (ARISE-Initiative/robosuite) | Simulator that generated the demonstrations | MIT |
-
-
-## 2. Video inputs and decision targets
+## Video inputs and decision targets
 
 Videos can have different frame counts. Pass them as lists of NumPy arrays:
 
