@@ -1,7 +1,6 @@
 """NumPy-only validation, storage, batching, and metrics for video collections."""
 from pathlib import Path
 import pickle
-
 import numpy as np
 
 
