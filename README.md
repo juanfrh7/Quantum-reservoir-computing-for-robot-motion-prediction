@@ -6,7 +6,7 @@
 
 Reservoir computing is a way to learn from time-dependent data, such as time series, signals or control tasks. The input sequence drives a fixed dynamical system, the *reservoir*, and we only train a simple linear *readout* on top of its state. Classically, the reservoir is a random recurrent neural network called an Echo State Network (ESN). A *quantum* reservoir swaps that network for a set of interacting qubits and uses their measured expectation values as features.
 
-Why bother? First, n qubits live in a 2^n-dimensional state space, so a handful of them might do the job of a much larger classical network (Fujii and Nakajima, 2017, found that 5–7 qubits could rival ESNs with hundreds of nodes). Second, the quantum part is never trained, so there's no costly circuit optimisation. Third, the dissipation that usually hurts quantum hardware becomes useful here: it gives the reservoir its fading memory. Whether all this adds up to a real advantage is still an open question, and that's what this project sets out to test.
+Why bother? First, n qubits live in a 2<sup>n</sup>-dimensional state space, so a handful of them might do the job of a much larger classical network (Fujii and Nakajima, 2017, found that 5–7 qubits could rival ESNs with hundreds of nodes). Second, the quantum part is never trained, so there's no costly circuit optimisation. Third, the dissipation that usually hurts quantum hardware becomes useful here: it gives the reservoir its fading memory. Whether all this adds up to a real advantage is still an open question, and that's what this project sets out to test.
 
 ### The task: imitating a robot arm
 
