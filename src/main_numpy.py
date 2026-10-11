@@ -11,8 +11,8 @@ from video_data import frame_metrics, load_dataset, split_video_indices, validat
 # All settings are here. Relative paths are resolved from this file's directory.
 BASE_DIR = Path(__file__).resolve().parent
 RESULTS_DIR = BASE_DIR / "results"
-ESN_PARAMS = RESULTS_DIR / "esn_size_100_leak_rate_0.3.npz"
-QUANTUM_PARAMS = RESULTS_DIR / "qr_n_6_hz_1.0_jz_10_leak_rate_0.3.npz"
+ESN_PARAMS = RESULTS_DIR / "sweep" / "esn_reservoir_size_100_adam.npz"
+QUANTUM_PARAMS = RESULTS_DIR / "sweep" / "quantum_num_qubits_6_adam.npz"
 DATASET_PATH = BASE_DIR / "dataset/final_dataset.pkl"
 SEED = 42  # Match main.py when recreating its test split.
 USE_TEST_SPLIT = True  # False evaluates every video in an independent dataset.
