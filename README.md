@@ -118,7 +118,7 @@ The learning problem is therefore **behavior cloning as sequence regression**: g
 
 ### From HDF5 to nested lists (`dataset_generation.ipynb`)
 
-The notebook `dataset_generation.ipynb` converts the HDF5 file into plain Python nested lists. It does **no padding and no masking**: every demo keeps its own length. Required packages: `h5py`, `numpy`, `pandas`. It opens the HDF5 file, checks that it contains the Lift task, and selects which demos to load (by default all 200, in numeric order). For each demo it joins the four observation groups into one table of 19 input values per time step and takes the 7 action values as targets. Inputs and targets are paired at the same time step: the input is the state the operator saw, and the target is the action they then issued. It then checks that every demo is consistent (matching lengths, 19 inputs and 7 targets per step, no missing values) and saves the result, together with the column names and demo names, to a pickle file (`~/ionQ/lift_lists.pkl` by default).
+The notebook `dataset_generation.ipynb` (needs `h5py`, `numpy`, `pandas`) turns the HDF5 file into plain Python nested lists, keeping each demo at its own length with no padding. It loads the 200 Lift demos, joins the four observation groups into 19 inputs per time step, and pairs each step with the 7-value action the operator took at that same step. After checking that every demo is consistent (matching lengths, no missing values), it saves the lists, column names and demo names to a pickle file (`~/ionQ/lift_lists.pkl` by default).
 
 #### Resulting structure
 
