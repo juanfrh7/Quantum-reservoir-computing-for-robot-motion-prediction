@@ -6,8 +6,8 @@
 #    Z and X bases, and the action is recomputed from the measured counts.
 #
 # `backend` is supplied by Qollab. On the Built-in simulator each circuit has 7 qubits (one ancilla, reset
-# after every use). IonQ backends have no reset and take one circuit per run, so there a single 24-qubit
-# circuit with fresh ancillas computes one frame.
+# after every use). IonQ backends take one job per run, so there a single 24-qubit circuit, with fresh
+# ancillas in place of reset, computes one frame.
 #
 # lift_policy.npz holds the trained policy and the demonstration. It is made by src/train_readout.py from the
 # 6-qubit reservoir of the size sweep (src/sweep.py). src/main.py is a different file: the PyTorch training script.
@@ -265,6 +265,8 @@ def plot_sweep(fig, results, live):
 
 
 def main(shots: int = 500, replay: int = 6, every: int = 8, retrain: bool = False, max_qubits: int = 6):
+    shots, replay, every = max(1, shots), max(1, replay), min(max(1, every), len(OBS))   # keep the settings in range
+
     # exact reservoir through the whole demonstration
     exact = actions_from(OBS, exact_features(ANGLES))
     print(f"Demonstration with {len(OBS)} frames, {N} reservoir qubits, damping {GAMMA}")
@@ -277,7 +279,7 @@ def main(shots: int = 500, replay: int = 6, every: int = 8, retrain: bool = Fals
     measured = None
     try:
         if "ionq" in str(backend).lower():
-            # IonQ: no reset, and one circuit per run. One frame, two frames replayed, 24 qubits.
+            # IonQ: one job per run, sent as one circuit without reset. One frame, two frames replayed, 24 qubits.
             replay, frames = min(replay, 2), frames[len(frames) // 2:][:1]
             circuit = circuit_without_reset(rows(frames[0]))
             print(f"\nRunning 1 circuit of {circuit.num_qubits} qubits on the backend ...")
@@ -300,7 +302,7 @@ def main(shots: int = 500, replay: int = 6, every: int = 8, retrain: bool = Fals
         print(f"Measured vs exact simulation of the same circuits, mean squared difference: {np.mean((measured - replayed)**2):.4f}")
         print(f"Replaying {replay} frames vs the full history, mean squared difference: {np.mean((replayed - exact[frames])**2):.4f}")
     except Exception as error:
-        print(f"\nThis backend could not run the reservoir circuit: {type(error).__name__}: {error}")
+        print(f"\nTHE BACKEND RUN FAILED, so no actions were measured on it: {type(error).__name__}: {error}")
 
     # the size sweep: what was run, what it gave and, in the lower half of the figure, its plot
     try:
@@ -350,7 +352,8 @@ def main(shots: int = 500, replay: int = 6, every: int = 8, retrain: bool = Fals
     axes.flat[7].axis("off")
     handles, labels = axes.flat[0].get_legend_handles_labels()
     axes.flat[7].legend(handles, labels, loc="center", frameon=False)
-    top.suptitle("Lift: action commands along one held-out demonstration", x=0.01, ha="left", fontsize=13)
+    failed = "" if measured is not None else " (the backend run failed: no measured points)"
+    top.suptitle("Lift: action commands along one held-out demonstration" + failed, x=0.01, ha="left", fontsize=13)
     if results:
         try:
             plot_sweep(bottom, results, live if stored else None)
