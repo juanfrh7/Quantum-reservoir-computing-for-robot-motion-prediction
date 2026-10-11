@@ -1,2 +1,6 @@
 .venv/
 __pycache__/
+.pdm-python
+eval_cache.json
+*.tmp
+src/results/*_quick*/

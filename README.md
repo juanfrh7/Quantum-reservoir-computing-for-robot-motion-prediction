@@ -1,4 +1,10 @@
-# Documentation
+# Quantum reservoir computing for robot motion prediction
+
+A trapped-ion-style quantum reservoir computer used as the memory of a robot controller. The reservoir is
+benchmarked against classical baselines on a robot manipulation task, and the trained controller runs as
+Qiskit circuits on Qollab's simulators.
+
+This effort is supported by Qollab & IonQ.
 
 ## Introduction
 
@@ -10,12 +16,130 @@ First, n qubits live in a 2<sup>n</sup>-dimensional state space, so a handful of
 
 ### The task: imitating a robot arm
 
-We use the **Lift** task from the robomimic benchmark, where a Franka Panda robot arm picks up a cube from a table. The dataset (`low_dim_v15.hdf5`) has 200 demonstrations recorded by a human operator. At each time step, 19 numbers describe the scene: where the gripper is and how it's oriented, how open its fingers are, and where the cube is relative to the gripper. The target is the operator's action at that step, 7 numbers that say how to move and rotate the gripper and whether to open or close it. In short, the model watches the states so far and must guess what the human did next.
+We use the **Lift** task from the robomimic benchmark, where a Franka Panda robot arm picks up a cube from a table. The dataset (`low_dim_v15.hdf5`) has 200 demonstrations recorded by a human operator; this project uses the first 100 of them. At each time step, 19 numbers describe the scene: where the gripper is and how it's oriented, how open its fingers are, and where the cube is relative to the gripper. The target is the operator's action at that step, 7 numbers that say how to move and rotate the gripper and whether to open or close it. In short, the model watches the states so far and must guess what the human did next.
 
 ### Why quantum reservoirs for this dataset?
 
-This task is a natural fit for reservoir computing. The right action depends not just on the current state but on where we are in the motion (approaching, grasping or lifting), so the model needs memory. The mapping is also partly nonlinear: the gripper command, for example, flips suddenly from "open" to "close" once the gripper reaches the cube, a jump that a weighted sum of the inputs can't reproduce. And with only 19 inputs, the problem is small enough to encode into a few qubits, which makes it a realistic target for today's quantum hardware
+This task is a natural fit for reservoir computing. The right action depends not just on the current state but on where we are in the motion (approaching, grasping or lifting), so the model needs memory. The mapping is also partly nonlinear: the gripper command, for example, flips suddenly from "open" to "close" once the gripper reaches the cube, a jump that a weighted sum of the inputs can't reproduce. And with only 19 inputs, the problem is small enough to encode into a few qubits, which makes it a realistic target for today's quantum hardware.
 
+### The reservoir used here
+
+At every time step of a demonstration:
+
+1. The 19 observations are standardised and projected to one rotation angle per qubit (RY).
+2. Every qubit gets an RZ rotation, and every pair of qubits an XX rotation with a fixed random strength.
+3. Every qubit loses a fraction 0.3 of its excitation (amplitude damping), which makes old inputs fade.
+4. The averages of Z and X on every qubit, and of ZZ and XX on every pair, are the features for the readout.
+
+The state is carried from one time step to the next within a demonstration. We compare this with a classical
+reservoir (echo state network) and a plain linear model, and run the trained controller as circuits.
+
+## Run it on Qollab
+
+Press **Run**. `main.py` loads the trained 6-qubit policy from `lift_policy.npz` and does three things:
+
+- It simulates the reservoir exactly along one held-out demonstration and prints the error against the human.
+- For a few frames it builds the same reservoir as a circuit, runs it on the selected backend, and recomputes
+  the action from the measured counts. The figure shows the human (grey), the exact policy (blue) and the
+  measured actions (orange dots).
+- It prints what `src/sweep.py` ran offline (its settings) and what that gave (MSE and MAE of every trained
+  reservoir, from `src/results/sweep/results.json`), and draws the size sweep in the lower half of the figure.
+
+| Backend | What is sent |
+|---|---|
+| Built-in simulator | 12 circuits of 7 qubits: 6 reservoir qubits and one ancilla, reset after every use |
+| IonQ simulators | one circuit of 24 qubits for one frame, because IonQ backends have no reset and take one job per run |
+
+Amplitude damping is built from gates: a controlled rotation moves part of each qubit's excitation onto an
+ancilla. The Run settings are `shots`, `replay` (how many past frames each circuit replays; the reservoir
+forgets older ones) and `every` (which frames are measured).
+
+Tick `retrain` to train the reservoirs again inside the run instead of only reading the stored results. It
+runs the code and data in `src/` (NumPy, in the browser): every classical reservoir, the quantum reservoirs up
+to `max_qubits`, and the policy of the demo. The retrained scores are printed next to the stored ones and
+marked with rings in the figure. Up to 6 qubits this took about 7 seconds on Qollab and gave the stored scores
+back to rounding error; 8 qubits takes longer, and 10 or 12 are better run offline with `src/sweep.py`.
+
+## Results
+
+Test loss is the mean squared error against the human's actions on 15 held-out demonstrations (lower is better).
+
+| Model | Features | Adam readout | Exact (ridge) readout |
+|---|---|---|---|
+| Classical reservoir, 10 nodes | 10 | 0.0565 | 0.0564 |
+| Classical reservoir, 20 nodes | 20 | 0.0481 | 0.0478 |
+| Classical reservoir, 50 nodes | 50 | 0.0459 | 0.0456 |
+| Classical reservoir, 100 nodes | 100 | 0.0376 | 0.0370 |
+| Quantum reservoir, 4 qubits | 20 | 0.0985 | 0.0834 |
+| Quantum reservoir, 6 qubits | 42 | 0.0605 | 0.0590 |
+| Quantum reservoir, 8 qubits | 72 | 0.0521 | 0.0483 |
+| Quantum reservoir, 10 qubits | 110 | 0.0503 | 0.0453 |
+| Quantum reservoir, 12 qubits | 156 | 0.0474 | 0.0432 |
+
+For reference, always predicting the average action gives 0.1740 and a linear model on the current
+observation gives 0.0448.
+
+![Test error against reservoir size](src/results/sweep/size_sweep.png)
+
+- The quantum reservoir improves steadily with size and reaches the linear model at 10 to 12 qubits.
+- The 100-node classical reservoir is clearly ahead. We found no quantum advantage on this task.
+- The policy in the Qollab demo also shows the readout the current observation. It scores 0.0430, and 0.0439
+  when its features are measured with 1,000 shots.
+
+Limits of these numbers: one random reservoir per size and 15 test demonstrations, so small gaps between rows
+are within noise. The Adam readout has not fully converged for the quantum reservoirs. The error is measured
+against the human's actions; the policy was not run in the robot simulator, so there is no success rate.
+
+## Files
+
+There are two files called `main.py`. The one at the top is what Qollab runs. `src/main.py` is the PyTorch
+training script.
+
+| File | What it does | Needs |
+|---|---|---|
+| `main.py` | Qollab entry point: runs the trained policy as circuits | Qollab |
+| `lift_policy.npz` | the trained policy and one held-out demonstration | |
+| `src/sweep.py` | trains both reservoirs at every size (the table above) | NumPy |
+| `src/sweep_plots.ipynb` | plots the size sweep | NumPy, Matplotlib |
+| `src/train_readout.py` | makes `lift_policy.npz` from the 6-qubit reservoir of the sweep | NumPy |
+| `src/main.py` | trains one configuration | PyTorch, Qiskit |
+| `src/reservoirs.py`, `src/utils.py` | the reservoir models and training code for `src/main.py` | PyTorch, Qiskit |
+| `src/reservoirs_numpy.py`, `src/utils_numpy.py`, `src/main_numpy.py` | NumPy copies of the models, and evaluation of saved parameter files | NumPy |
+| `src/video_data.py` | dataset loading, split and normalisation | NumPy |
+| `src/scaling_tuned.py`, `src/scaling_core_all_w2.py` | tuned comparison across sets of measured observables | PyTorch, Qiskit, Matplotlib |
+| `src/reservoir_training.ipynb` | training curves for one configuration | PyTorch, Qiskit |
+| `src/dataset/` | `final_dataset.pkl` (the 100 demonstrations used) and the notebook that makes it | h5py, pandas for the notebook |
+| `src/results/sweep/` | scores (`results.json`), trained parameters and the figure of the size sweep | |
+| `tests/` | unit tests | |
+
+`requirements.txt` is what Qollab installs and what the NumPy scripts need (NumPy and Qiskit).
+`requirements_torch.txt` adds what the PyTorch scripts need, and `requirements_notebook.txt` what the notebooks need.
+
+## Reproduce it
+
+```
+pip install -r requirements.txt
+cd src
+python sweep.py            # the size sweep; the 12-qubit run took about 90 minutes on a laptop
+python train_readout.py    # writes lift_policy.npz
+```
+
+`sweep.py` skips runs that are already in `src/results/sweep/results.json`, so delete that folder to start
+again. To rebuild `final_dataset.pkl`, run `src/dataset/dataset_generation.ipynb` next to robomimic's
+`low_dim_v15.hdf5` (see *Input Data* below).
+
+## How it was checked
+
+- The simulation in `sweep.py` gives the same features as `reservoirs_numpy.QuantumReservoir` to 13 decimal
+  places, and the same test scores as a parameter file exported by `src/main.py` to 9 decimal places.
+- The fast simulation in `scaling_tuned.py` gives the same results as the Qiskit reservoir in
+  `src/reservoirs.py` to 7 decimal places on a reduced run.
+- On Qollab, the actions recomputed from measured counts match an exact simulation of the same circuits to a
+  mean squared difference of 0.001 to 0.003 at 500 shots, on the Built-in simulator and on an IonQ simulator.
+- Retraining inside a Qollab run (up to 6 qubits) gives the stored test scores back to within 1e-15.
+- `python -m unittest tests.test_numpy tests.test_variable_videos` runs the NumPy tests from the top folder.
+
+The rest of this page documents the data and the training code in detail.
 
 ## Input Data
 
@@ -118,14 +242,14 @@ The learning problem is therefore **behavior cloning as sequence regression**: g
 
 ### From HDF5 to nested lists (`dataset_generation.ipynb`)
 
-The notebook `dataset_generation.ipynb` (needs `h5py`, `numpy`, `pandas`) turns the HDF5 file into plain Python nested lists, keeping each demo at its own length with no padding. It loads the 200 Lift demos, joins the four observation groups into 19 inputs per time step, and pairs each step with the 7-value action the operator took at that same step. After checking that every demo is consistent (matching lengths, no missing values), it saves the lists, column names and demo names to a pickle file (`~/ionQ/lift_lists.pkl` by default).
+The notebook `dataset_generation.ipynb` (needs `h5py`, `numpy`, `pandas`) turns the HDF5 file into plain Python nested lists, keeping each demo at its own length with no padding. It loads the first 100 of the 200 Lift demos (`N_DEMOS = 100`), joins the four observation groups into 19 inputs per time step, and pairs each step with the 7-value action the operator took at that same step. After checking that every demo is consistent (matching lengths, no missing values), it saves the lists, column names and demo names to a pickle file (`final_dataset.pkl`, next to the HDF5 file).
 
 #### Resulting structure
 
 ```
-inputs  = [video_1, video_2, ..., video_N]        # one element per demo (N = 200)
+inputs  = [video_1, video_2, ..., video_N]        # one element per demo (N = 100)
 video_i = [time_steps, values]
-    time_steps = [1, 2, ..., T_i]                 # T_i in [36, 64], differs per demo
+    time_steps = [1, 2, ..., T_i]                 # T_i in [36, 59], differs per demo
     values     = [[19 floats at step 1],
                   [19 floats at step 2],
                   ...]                            # T_i rows
@@ -208,7 +332,7 @@ must use the same video order.
 
 ## Train and export
 
-Install `requirements.txt` in the training environment. Configure paths and
+Install `requirements_torch.txt` in the training environment. Configure paths and
 model settings at the top of `src/main.py`, then run it in your editor or call:
 
 ```python
@@ -220,7 +344,7 @@ models, metrics = train(X, y)
 Calling `train()` without arguments loads `src/dataset/final_dataset.pkl`.
 Set `DATASET_PATH` in `src/main.py` to use another notebook-format pickle.
 The script splits by video into 70% training, 15% validation, and 15% test sets.
-For example, 200 videos give 140/30/30. Frames from a video stay in one split.
+The 100 videos here give 70/15/15. Frames from a video stay in one split.
 
 Only `w_out` and its bias are trained with Adam, minimizing MSE. Reservoir
 features and aligned targets are cached once per split over real frames.
@@ -277,7 +401,8 @@ the shared JSON describes the latest run.
 
 ## Evaluate with NumPy only
 
-Install NumPy in the evaluation environment. Copy the selected `.npz` checkpoints
+Install NumPy in the evaluation environment. By default `ESN_PARAMS` and `QUANTUM_PARAMS`
+point at two files of the size sweep in `src/results/sweep/`. Copy the selected `.npz` checkpoints
 and dataset to the evaluation machine. Set `ESN_PARAMS` and `QUANTUM_PARAMS` in
 `src/main_numpy.py` to the chosen `.npz` files. Set `DATASET_PATH` there to
 the same `final_dataset.pkl`. It loads the original dataset
@@ -406,3 +531,17 @@ in a NumPy-only environment. In a training environment, also run
 `python -m unittest tests.test_training_export`. The integration checks cover
 dense and variable-length training, video splits, exported parameter equality,
 and separate inference processes with Torch/Qiskit imports blocked.
+
+## Credits and disclosure
+
+- **Data:** the Lift demonstrations come from robomimic (Mandlekar et al., CoRL 2021; reference and licences
+  under *Input Data* above), recorded in the robosuite simulator. `src/dataset/final_dataset.pkl` and the
+  demonstration inside `lift_policy.npz` are derived from that data.
+- **Libraries:** Qiskit, NumPy, Matplotlib and PyTorch.
+- **Background:** quantum reservoir computing was introduced by Fujii and Nakajima, "Harnessing
+  Disordered-Ensemble Quantum Dynamics for Machine Learning", Phys. Rev. Applied 8, 024030 (2017).
+- **AI assistance:** code and analysis were developed with the help of AI assistants (Claude and ChatGPT).
+  The team ran and checked the results.
+- **Build window:** all code here was written during the hackathon, 9 to 11 October 2026.
+
+The code is released under the MIT licence (see `LICENSE`).

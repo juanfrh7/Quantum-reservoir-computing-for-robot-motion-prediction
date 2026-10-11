@@ -1,3 +1,6 @@
--r requirements.txt
+# the notebooks in src/ (h5py and pandas are for dataset_generation.ipynb)
+-r requirements_torch.txt
 matplotlib
 ipykernel
+h5py
+pandas

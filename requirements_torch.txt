@@ -1,0 +1,4 @@
+# the PyTorch scripts: src/main.py, src/reservoirs.py, src/utils.py, src/scaling_*.py
+-r requirements.txt
+torch
+matplotlib
