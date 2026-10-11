@@ -92,28 +92,21 @@ against the human's actions; the policy was not run in the robot simulator, so t
 
 ## Files
 
-There are two files called `main.py`. The one at the top is what Qollab runs. `src/main.py` is the PyTorch
-training script.
+All files sit together at the top level of the Qollab project. Everything here runs with NumPy and Qiskit only.
 
-| File | What it does | Needs |
-|---|---|---|
-| `main.py` | Qollab entry point: runs the trained policy as circuits | Qollab |
-| `lift_policy.npz` | the trained policy and one held-out demonstration | |
-| `src/sweep.py` | trains both reservoirs at every size (the table above) | NumPy |
-| `src/sweep_plots.ipynb` | plots the size sweep | NumPy, Matplotlib |
-| `src/train_readout.py` | makes `lift_policy.npz` from the 6-qubit reservoir of the sweep | NumPy |
-| `src/main.py` | trains one configuration | PyTorch, Qiskit |
-| `src/reservoirs.py`, `src/utils.py` | the reservoir models and training code for `src/main.py` | PyTorch, Qiskit |
-| `src/reservoirs_numpy.py`, `src/utils_numpy.py`, `src/main_numpy.py` | NumPy copies of the models, and evaluation of saved parameter files | NumPy |
-| `src/video_data.py` | dataset loading, split and normalisation | NumPy |
-| `src/scaling_tuned.py`, `src/scaling_core_all_w2.py` | tuned comparison across sets of measured observables | PyTorch, Qiskit, Matplotlib |
-| `src/reservoir_training.ipynb` | training curves for one configuration | PyTorch, Qiskit |
-| `src/dataset/` | `final_dataset.pkl` (the 100 demonstrations used) and the notebook that makes it | h5py, pandas for the notebook |
-| `src/results/sweep/` | scores (`results.json`), trained parameters and the figure of the size sweep | |
-| `tests/` | unit tests | |
-
-`requirements.txt` is what Qollab installs and what the NumPy scripts need (NumPy and Qiskit).
-`requirements_torch.txt` adds what the PyTorch scripts need, and `requirements_notebook.txt` what the notebooks need.
+| File | What it does |
+|---|---|
+| `main.py` | Qollab entry point: replays one held-out demonstration with the trained 6-qubit policy, first by exact simulation, then as circuits on the selected backend |
+| `lift_policy.npz` | the trained policy (input weights, couplings, damping, readout) and the demonstration it replays |
+| `train_readout.py` | trains that policy from the 6-qubit reservoir of `sweep.py`, with a readout made robust to measurement shot noise, and saves `lift_policy.npz` |
+| `sweep.py` | trains the classical and quantum reservoir readouts at every size; resumable, results go to `results.json` |
+| `results.json` | scores of every readout trained by the sweep |
+| `reservoirs.py` | the ESN and density-matrix quantum reservoir models, in NumPy |
+| `utils.py` | feature extraction, prediction and metrics, in NumPy |
+| `video_data.py` | loading, validation, batching and metrics for the demonstration data |
+| `final_dataset.pkl` | the prepared robomimic Lift demonstrations |
+| `requirements.txt` | what Qollab installs: Qiskit and NumPy |
+| `README.md` | this write-up, shown on the Project Card |
 
 ## Reproduce it
 
