@@ -1,0 +1,694 @@
+{
+  "average_action": {
+    "ridge": 1e-08,
+    "features": 0,
+    "train": {
+      "loss": 0.17153358467799915,
+      "mae": 0.2389189049816005
+    },
+    "validation": {
+      "loss": 0.17675973051590466,
+      "mae": 0.24641066651754223
+    },
+    "test": {
+      "loss": 0.17398244466833845,
+      "mae": 0.24059700198505365
+    }
+  },
+  "linear_on_observation": {
+    "ridge": 10.0,
+    "features": 19,
+    "train": {
+      "loss": 0.04131101374831483,
+      "mae": 0.11247117744888917
+    },
+    "validation": {
+      "loss": 0.04366422835835297,
+      "mae": 0.11896786744028412
+    },
+    "test": {
+      "loss": 0.044766866256636256,
+      "mae": 0.1184901150871786
+    }
+  },
+  "esn_reservoir_size_10_adam": {
+    "model": "esn",
+    "config": {
+      "reservoir_size": 10,
+      "leak_rate": 0.3,
+      "spectral_radius": 1.0,
+      "reservoir_connectivity": 1.0,
+      "time_step": 1,
+      "seed": 42,
+      "input_dim": 19,
+      "output_dim": 7
+    },
+    "input_gain": 1.0,
+    "readout": "adam",
+    "seconds": 0.3,
+    "best_epoch": 177,
+    "features": 10,
+    "train": {
+      "loss": 0.05671432433347959,
+      "mae": 0.13403711179391353
+    },
+    "validation": {
+      "loss": 0.06514168103190998,
+      "mae": 0.14764103959650438
+    },
+    "test": {
+      "loss": 0.056522843659220515,
+      "mae": 0.13215659548805242
+    }
+  },
+  "esn_reservoir_size_10_ridge": {
+    "model": "esn",
+    "config": {
+      "reservoir_size": 10,
+      "leak_rate": 0.3,
+      "spectral_radius": 1.0,
+      "reservoir_connectivity": 1.0,
+      "time_step": 1,
+      "seed": 42,
+      "input_dim": 19,
+      "output_dim": 7
+    },
+    "input_gain": 1.0,
+    "readout": "ridge",
+    "seconds": 0.3,
+    "ridge": 1.0,
+    "features": 10,
+    "train": {
+      "loss": 0.05657034389052435,
+      "mae": 0.13375640033445105
+    },
+    "validation": {
+      "loss": 0.06519139052185527,
+      "mae": 0.14770839886044798
+    },
+    "test": {
+      "loss": 0.05637535951604228,
+      "mae": 0.13173481299172815
+    }
+  },
+  "esn_reservoir_size_20_adam": {
+    "model": "esn",
+    "config": {
+      "reservoir_size": 20,
+      "leak_rate": 0.3,
+      "spectral_radius": 1.0,
+      "reservoir_connectivity": 1.0,
+      "time_step": 1,
+      "seed": 42,
+      "input_dim": 19,
+      "output_dim": 7
+    },
+    "input_gain": 1.0,
+    "readout": "adam",
+    "seconds": 0.4,
+    "best_epoch": 193,
+    "features": 20,
+    "train": {
+      "loss": 0.04398128372214966,
+      "mae": 0.11311759187137532
+    },
+    "validation": {
+      "loss": 0.04780363085031264,
+      "mae": 0.11987071095650917
+    },
+    "test": {
+      "loss": 0.04810360796531376,
+      "mae": 0.11684845062023284
+    }
+  },
+  "esn_reservoir_size_20_ridge": {
+    "model": "esn",
+    "config": {
+      "reservoir_size": 20,
+      "leak_rate": 0.3,
+      "spectral_radius": 1.0,
+      "reservoir_connectivity": 1.0,
+      "time_step": 1,
+      "seed": 42,
+      "input_dim": 19,
+      "output_dim": 7
+    },
+    "input_gain": 1.0,
+    "readout": "ridge",
+    "seconds": 0.4,
+    "ridge": 1e-08,
+    "features": 20,
+    "train": {
+      "loss": 0.04374521995440799,
+      "mae": 0.11250200034384672
+    },
+    "validation": {
+      "loss": 0.04737213333877848,
+      "mae": 0.1192601975595859
+    },
+    "test": {
+      "loss": 0.04777031103848135,
+      "mae": 0.11602173681516745
+    }
+  },
+  "esn_reservoir_size_50_adam": {
+    "model": "esn",
+    "config": {
+      "reservoir_size": 50,
+      "leak_rate": 0.3,
+      "spectral_radius": 1.0,
+      "reservoir_connectivity": 1.0,
+      "time_step": 1,
+      "seed": 42,
+      "input_dim": 19,
+      "output_dim": 7
+    },
+    "input_gain": 1.0,
+    "readout": "adam",
+    "seconds": 0.5,
+    "best_epoch": 179,
+    "features": 50,
+    "train": {
+      "loss": 0.03687456812562318,
+      "mae": 0.10013885866391352
+    },
+    "validation": {
+      "loss": 0.04656485382872952,
+      "mae": 0.11486815881553047
+    },
+    "test": {
+      "loss": 0.045931031038288495,
+      "mae": 0.1102522634520509
+    }
+  },
+  "esn_reservoir_size_50_ridge": {
+    "model": "esn",
+    "config": {
+      "reservoir_size": 50,
+      "leak_rate": 0.3,
+      "spectral_radius": 1.0,
+      "reservoir_connectivity": 1.0,
+      "time_step": 1,
+      "seed": 42,
+      "input_dim": 19,
+      "output_dim": 7
+    },
+    "input_gain": 1.0,
+    "readout": "ridge",
+    "seconds": 0.5,
+    "ridge": 10.0,
+    "features": 50,
+    "train": {
+      "loss": 0.03721259581026341,
+      "mae": 0.10029489526454635
+    },
+    "validation": {
+      "loss": 0.046161187562645145,
+      "mae": 0.11349162580375008
+    },
+    "test": {
+      "loss": 0.0456471735309882,
+      "mae": 0.10890713696462742
+    }
+  },
+  "esn_reservoir_size_100_adam": {
+    "model": "esn",
+    "config": {
+      "reservoir_size": 100,
+      "leak_rate": 0.3,
+      "spectral_radius": 1.0,
+      "reservoir_connectivity": 1.0,
+      "time_step": 1,
+      "seed": 42,
+      "input_dim": 19,
+      "output_dim": 7
+    },
+    "input_gain": 1.0,
+    "readout": "adam",
+    "seconds": 2.3,
+    "best_epoch": 176,
+    "features": 100,
+    "train": {
+      "loss": 0.03177225583873348,
+      "mae": 0.09136656155405268
+    },
+    "validation": {
+      "loss": 0.036527886756898324,
+      "mae": 0.10388671460925675
+    },
+    "test": {
+      "loss": 0.03759871233417269,
+      "mae": 0.10335678675931308
+    }
+  },
+  "esn_reservoir_size_100_ridge": {
+    "model": "esn",
+    "config": {
+      "reservoir_size": 100,
+      "leak_rate": 0.3,
+      "spectral_radius": 1.0,
+      "reservoir_connectivity": 1.0,
+      "time_step": 1,
+      "seed": 42,
+      "input_dim": 19,
+      "output_dim": 7
+    },
+    "input_gain": 1.0,
+    "readout": "ridge",
+    "seconds": 2.3,
+    "ridge": 10.0,
+    "features": 100,
+    "train": {
+      "loss": 0.032266838453473036,
+      "mae": 0.09156748049835166
+    },
+    "validation": {
+      "loss": 0.03598863730270185,
+      "mae": 0.10168265053921062
+    },
+    "test": {
+      "loss": 0.03697958515726053,
+      "mae": 0.1013560998893173
+    }
+  },
+  "quantum_num_qubits_4_adam": {
+    "model": "quantum",
+    "config": {
+      "num_qubits": 4,
+      "hz": 1,
+      "Jz": 3,
+      "reservoir_time": 1.0,
+      "interaction": "XX",
+      "connectivity": "all_to_all",
+      "single_observables": [
+        "Z",
+        "X"
+      ],
+      "pair_observables": [
+        "ZZ",
+        "XX"
+      ],
+      "damping": 0.3,
+      "time_step": 1,
+      "coupling_seed": 42,
+      "seed": 42,
+      "input_dim": 19,
+      "output_dim": 7
+    },
+    "input_gain": 1.0,
+    "readout": "adam",
+    "seconds": 1.1,
+    "best_epoch": 200,
+    "features": 20,
+    "train": {
+      "loss": 0.09957003807980881,
+      "mae": 0.1715070320425674
+    },
+    "validation": {
+      "loss": 0.09628931327547331,
+      "mae": 0.16903353688894998
+    },
+    "test": {
+      "loss": 0.09852836194869181,
+      "mae": 0.17371548413892246
+    }
+  },
+  "quantum_num_qubits_4_ridge": {
+    "model": "quantum",
+    "config": {
+      "num_qubits": 4,
+      "hz": 1,
+      "Jz": 3,
+      "reservoir_time": 1.0,
+      "interaction": "XX",
+      "connectivity": "all_to_all",
+      "single_observables": [
+        "Z",
+        "X"
+      ],
+      "pair_observables": [
+        "ZZ",
+        "XX"
+      ],
+      "damping": 0.3,
+      "time_step": 1,
+      "coupling_seed": 42,
+      "seed": 42,
+      "input_dim": 19,
+      "output_dim": 7
+    },
+    "input_gain": 1.0,
+    "readout": "ridge",
+    "seconds": 1.1,
+    "ridge": 1e-08,
+    "features": 20,
+    "train": {
+      "loss": 0.08921856022066613,
+      "mae": 0.16175569275544574
+    },
+    "validation": {
+      "loss": 0.08487666243682213,
+      "mae": 0.15980650193199833
+    },
+    "test": {
+      "loss": 0.0834152289365884,
+      "mae": 0.16178761035193853
+    }
+  },
+  "quantum_num_qubits_6_adam": {
+    "model": "quantum",
+    "config": {
+      "num_qubits": 6,
+      "hz": 1,
+      "Jz": 3,
+      "reservoir_time": 1.0,
+      "interaction": "XX",
+      "connectivity": "all_to_all",
+      "single_observables": [
+        "Z",
+        "X"
+      ],
+      "pair_observables": [
+        "ZZ",
+        "XX"
+      ],
+      "damping": 0.3,
+      "time_step": 1,
+      "coupling_seed": 42,
+      "seed": 42,
+      "input_dim": 19,
+      "output_dim": 7
+    },
+    "input_gain": 1.0,
+    "readout": "adam",
+    "seconds": 3.2,
+    "best_epoch": 199,
+    "features": 42,
+    "train": {
+      "loss": 0.06048275328445782,
+      "mae": 0.128844181066458
+    },
+    "validation": {
+      "loss": 0.07094113081863425,
+      "mae": 0.14103492122560093
+    },
+    "test": {
+      "loss": 0.06052455966476461,
+      "mae": 0.13043691944652935
+    }
+  },
+  "quantum_num_qubits_6_ridge": {
+    "model": "quantum",
+    "config": {
+      "num_qubits": 6,
+      "hz": 1,
+      "Jz": 3,
+      "reservoir_time": 1.0,
+      "interaction": "XX",
+      "connectivity": "all_to_all",
+      "single_observables": [
+        "Z",
+        "X"
+      ],
+      "pair_observables": [
+        "ZZ",
+        "XX"
+      ],
+      "damping": 0.3,
+      "time_step": 1,
+      "coupling_seed": 42,
+      "seed": 42,
+      "input_dim": 19,
+      "output_dim": 7
+    },
+    "input_gain": 1.0,
+    "readout": "ridge",
+    "seconds": 3.2,
+    "ridge": 0.01,
+    "features": 42,
+    "train": {
+      "loss": 0.05202888154101869,
+      "mae": 0.11966884127440285
+    },
+    "validation": {
+      "loss": 0.06383803835755474,
+      "mae": 0.13155745602407676
+    },
+    "test": {
+      "loss": 0.05904646494957316,
+      "mae": 0.12754662077095877
+    }
+  },
+  "quantum_num_qubits_8_adam": {
+    "model": "quantum",
+    "config": {
+      "num_qubits": 8,
+      "hz": 1,
+      "Jz": 3,
+      "reservoir_time": 1.0,
+      "interaction": "XX",
+      "connectivity": "all_to_all",
+      "single_observables": [
+        "Z",
+        "X"
+      ],
+      "pair_observables": [
+        "ZZ",
+        "XX"
+      ],
+      "damping": 0.3,
+      "time_step": 1,
+      "coupling_seed": 42,
+      "seed": 42,
+      "input_dim": 19,
+      "output_dim": 7
+    },
+    "input_gain": 1.0,
+    "readout": "adam",
+    "seconds": 21.8,
+    "best_epoch": 198,
+    "features": 72,
+    "train": {
+      "loss": 0.05534490984081416,
+      "mae": 0.12457303953216438
+    },
+    "validation": {
+      "loss": 0.07113045797236885,
+      "mae": 0.1390720017147258
+    },
+    "test": {
+      "loss": 0.0520805372804845,
+      "mae": 0.12374317825062332
+    }
+  },
+  "quantum_num_qubits_8_ridge": {
+    "model": "quantum",
+    "config": {
+      "num_qubits": 8,
+      "hz": 1,
+      "Jz": 3,
+      "reservoir_time": 1.0,
+      "interaction": "XX",
+      "connectivity": "all_to_all",
+      "single_observables": [
+        "Z",
+        "X"
+      ],
+      "pair_observables": [
+        "ZZ",
+        "XX"
+      ],
+      "damping": 0.3,
+      "time_step": 1,
+      "coupling_seed": 42,
+      "seed": 42,
+      "input_dim": 19,
+      "output_dim": 7
+    },
+    "input_gain": 1.0,
+    "readout": "ridge",
+    "seconds": 21.8,
+    "ridge": 1e-06,
+    "features": 72,
+    "train": {
+      "loss": 0.044268275251234133,
+      "mae": 0.11050854861201853
+    },
+    "validation": {
+      "loss": 0.06106777804453103,
+      "mae": 0.12969518009606834
+    },
+    "test": {
+      "loss": 0.04827245056689613,
+      "mae": 0.11817851597981975
+    }
+  },
+  "quantum_num_qubits_10_adam": {
+    "model": "quantum",
+    "config": {
+      "num_qubits": 10,
+      "hz": 1,
+      "Jz": 3,
+      "reservoir_time": 1.0,
+      "interaction": "XX",
+      "connectivity": "all_to_all",
+      "single_observables": [
+        "Z",
+        "X"
+      ],
+      "pair_observables": [
+        "ZZ",
+        "XX"
+      ],
+      "damping": 0.3,
+      "time_step": 1,
+      "coupling_seed": 42,
+      "seed": 42,
+      "input_dim": 19,
+      "output_dim": 7
+    },
+    "input_gain": 1.0,
+    "readout": "adam",
+    "seconds": 308.8,
+    "best_epoch": 198,
+    "features": 110,
+    "train": {
+      "loss": 0.047460300958536,
+      "mae": 0.11256461130840538
+    },
+    "validation": {
+      "loss": 0.058385195371215656,
+      "mae": 0.12590610806634234
+    },
+    "test": {
+      "loss": 0.05029421982864395,
+      "mae": 0.11521339657004397
+    }
+  },
+  "quantum_num_qubits_10_ridge": {
+    "model": "quantum",
+    "config": {
+      "num_qubits": 10,
+      "hz": 1,
+      "Jz": 3,
+      "reservoir_time": 1.0,
+      "interaction": "XX",
+      "connectivity": "all_to_all",
+      "single_observables": [
+        "Z",
+        "X"
+      ],
+      "pair_observables": [
+        "ZZ",
+        "XX"
+      ],
+      "damping": 0.3,
+      "time_step": 1,
+      "coupling_seed": 42,
+      "seed": 42,
+      "input_dim": 19,
+      "output_dim": 7
+    },
+    "input_gain": 1.0,
+    "readout": "ridge",
+    "seconds": 308.8,
+    "ridge": 0.001,
+    "features": 110,
+    "train": {
+      "loss": 0.039599213129250375,
+      "mae": 0.10243430880982606
+    },
+    "validation": {
+      "loss": 0.052498852054984294,
+      "mae": 0.11768099089943225
+    },
+    "test": {
+      "loss": 0.045306948653328016,
+      "mae": 0.10974006200602594
+    }
+  },
+  "quantum_num_qubits_12_adam": {
+    "model": "quantum",
+    "config": {
+      "num_qubits": 12,
+      "hz": 1,
+      "Jz": 3,
+      "reservoir_time": 1.0,
+      "interaction": "XX",
+      "connectivity": "all_to_all",
+      "single_observables": [
+        "Z",
+        "X"
+      ],
+      "pair_observables": [
+        "ZZ",
+        "XX"
+      ],
+      "damping": 0.3,
+      "time_step": 1,
+      "coupling_seed": 42,
+      "seed": 42,
+      "input_dim": 19,
+      "output_dim": 7
+    },
+    "input_gain": 1.0,
+    "readout": "adam",
+    "seconds": 5261.1,
+    "best_epoch": 198,
+    "features": 156,
+    "train": {
+      "loss": 0.04396885255929899,
+      "mae": 0.10729704846250854
+    },
+    "validation": {
+      "loss": 0.053264665846392195,
+      "mae": 0.12127193902531343
+    },
+    "test": {
+      "loss": 0.047377164292839315,
+      "mae": 0.11521452878341588
+    }
+  },
+  "quantum_num_qubits_12_ridge": {
+    "model": "quantum",
+    "config": {
+      "num_qubits": 12,
+      "hz": 1,
+      "Jz": 3,
+      "reservoir_time": 1.0,
+      "interaction": "XX",
+      "connectivity": "all_to_all",
+      "single_observables": [
+        "Z",
+        "X"
+      ],
+      "pair_observables": [
+        "ZZ",
+        "XX"
+      ],
+      "damping": 0.3,
+      "time_step": 1,
+      "coupling_seed": 42,
+      "seed": 42,
+      "input_dim": 19,
+      "output_dim": 7
+    },
+    "input_gain": 1.0,
+    "readout": "ridge",
+    "seconds": 5261.1,
+    "ridge": 0.0001,
+    "features": 156,
+    "train": {
+      "loss": 0.03483088993473943,
+      "mae": 0.09552884376466991
+    },
+    "validation": {
+      "loss": 0.04580102146563159,
+      "mae": 0.110635661228382
+    },
+    "test": {
+      "loss": 0.04318932390007332,
+      "mae": 0.11099055949527685
+    }
+  }
+}
