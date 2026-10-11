@@ -58,6 +58,17 @@ def batch_indices(videos, batch_size):
             yield indices[start:start + batch_size]
 
 
+def fit_input_normalization(X_train, min_std=1e-8):
+    """Estimate per-feature mean and standard deviation from real training frames."""
+    # Include each actual frame once, without validation/test data or padding.
+    if not np.isfinite(min_std) or min_std <= 0:
+        raise ValueError("min_std must be finite and positive.")
+    frames = np.concatenate(as_videos(X_train))
+    mean, std = frames.mean(axis=0), frames.std(axis=0)
+    # Constant features become zero after centering; avoid division by a tiny std.
+    return mean, np.where(std < min_std, 1.0, std)
+
+
 def load_dataset(path, dtype=np.float64):
     """Load the notebook's pickle and return aligned (T_i,D) input/target arrays."""
     # Time-step lists describe alignment; only the value matrices enter the reservoirs.

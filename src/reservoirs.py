@@ -517,14 +517,19 @@ def main():
     """Check both readouts on the configured training split without saving files."""
     # Reuse the dataset, seed, model settings, and Adam settings from main.py.
     import main as training
-    from utils import evaluate
-    from video_data import load_dataset, split_video_indices
+    from utils import configure_input_normalization, evaluate
+    from video_data import fit_input_normalization, load_dataset, split_video_indices
 
     torch.manual_seed(training.SEED)
     X, y = load_dataset(training.DATASET_PATH, dtype=np.float32)
     train_indices, val_indices, test_indices = split_video_indices(len(X), training.SEED)
     X_train, y_train = [X[i] for i in train_indices], [y[i] for i in train_indices]
     models, _ = training.build_models(X[0].shape[1], y[0].shape[1])
+    # Match main.py's training-only preprocessing before checking readout updates.
+    input_mean, input_std = fit_input_normalization(X_train, training.INPUT_STD_EPS)
+    for name, model in models.items():
+        gain = training.ESN_INPUT_GAIN if name == "Classical ESN" else training.QUANTUM_INPUT_GAIN
+        configure_input_normalization(model, input_mean, input_std, gain)
     print(f"Readout check: videos={len(X)}, splits={len(train_indices)}/{len(val_indices)}/{len(test_indices)}",
           flush=True)
     reports = {}

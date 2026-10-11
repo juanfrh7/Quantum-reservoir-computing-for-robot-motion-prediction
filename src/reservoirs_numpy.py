@@ -95,14 +95,19 @@ class _Reservoir:
             parameters["w_res"] = self.w_res
         else:
             parameters["J"] = self.J
-        metadata = json.dumps({
+        metadata = {
             "format_version": 1,
             "model_type": self.model_type,
             "model_config": self.config,
-        })
+        }
+        if hasattr(self, "input_preprocessing"):
+            # Preserve the statistics without applying them again to the folded weights.
+            metadata["input_preprocessing"] = self.input_preprocessing
+            parameters["input_mean"] = np.asarray(self.input_preprocessing["mean"])
+            parameters["input_std"] = np.asarray(self.input_preprocessing["std"])
         # A file handle prevents np.savez from silently appending an extension.
         with Path(path).open("wb") as output:
-            np.savez_compressed(output, metadata=np.array(metadata), **parameters)
+            np.savez_compressed(output, metadata=np.array(json.dumps(metadata)), **parameters)
 
 
 class ESNReservoir(_Reservoir):
@@ -335,6 +340,9 @@ def load_model(path):
         if value.shape != getattr(model, name).shape or not np.isfinite(value).all():
             raise ValueError(f"Invalid {name}.")
         setattr(model, name, value.copy())
+        if "input_preprocessing" in metadata:
+            # w_in already includes the transform, including during streaming inference.
+            model.input_preprocessing = metadata["input_preprocessing"]
         if kind == "quantum":
             model._build_operators()
     return model

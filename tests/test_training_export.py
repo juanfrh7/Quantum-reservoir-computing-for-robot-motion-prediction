@@ -15,11 +15,51 @@ import torch
 
 import main as training
 from reservoirs import ESNReservoir, QiskitQuantumReservoir, check_readout_optimization
-from utils import cached_metrics, make_loader, predict, reservoir_features, train_readout
+from utils import cached_metrics, configure_input_normalization, make_loader, predict, reservoir_features, train_readout
 from video_data import load_videos, split_video_indices
 
 
 class TrainingExportTests(unittest.TestCase):
+    def test_input_normalization_projection_and_numpy_roundtrip(self):
+        """Check folded normalization and gain match explicit standardization for raw inputs."""
+        # Different feature scales and a constant training feature exercise the projection.
+        from reservoirs_numpy import load_model
+        from utils import export_numpy_checkpoint
+        from video_data import fit_input_normalization
+
+        X = [np.array([[1.0, 5.0]], dtype=np.float32),
+             np.array([[1.1, 5.0], [0.9, 5.0], [1.2, 5.0]], dtype=np.float32)]
+        mean, std = fit_input_normalization(X)
+        self.assertEqual(std[1], 1.0)
+        raw = torch.tensor([[1.15, 5.0], [1.3, 6.0]])
+        configs = [("esn", dict(input_dim=2, output_dim=3, reservoir_size=4)),
+                   ("quantum", dict(input_dim=2, output_dim=3, num_qubits=2, damping=0.2))]
+        for kind, config in configs:
+            model = ESNReservoir(config) if kind == "esn" else QiskitQuantumReservoir(**config)
+            original_weight = model.w_in.weight.detach().double().clone()
+            original_bias = model.w_in.bias.detach().double().clone()
+            configure_input_normalization(model, mean, std, input_gain=1.7)
+            expected = ((raw.double() - torch.from_numpy(mean)) / torch.from_numpy(std) * 1.7
+                        ) @ original_weight.T + original_bias
+            np.testing.assert_allclose(model.w_in(raw).detach().numpy(), expected.numpy(), atol=2e-6)
+            with self.assertRaises(ValueError):
+                configure_input_normalization(model, mean, std)
+            with tempfile.TemporaryDirectory() as directory:
+                path = Path(directory) / "params.npz"
+                export_numpy_checkpoint(model, path, kind, config)
+                restored = load_model(path)
+                self.assertEqual(restored.input_preprocessing, model.input_preprocessing)
+                # All inference paths continue to accept raw videos and frames.
+                videos = raw.numpy()[None]
+                np.testing.assert_allclose(restored(videos), predict(model, videos).numpy(), atol=1e-5)
+                restored.initialize(1)
+                streamed = np.stack([restored(frame[None])[0] for frame in videos[0]])
+                np.testing.assert_allclose(streamed, restored(videos)[0], atol=1e-12)
+                restored.save(path)
+                reloaded = load_model(path)
+                self.assertEqual(reloaded.input_preprocessing, model.input_preprocessing)
+                np.testing.assert_allclose(reloaded(videos), restored(videos), atol=1e-12)
+
     def test_readout_diagnostic_checks_both_reservoirs(self):
         """Verify the diagnostic confirms changed readouts and fixed reservoirs."""
         # Independent decisions and unequal lengths exercise the real fitting path.
@@ -126,30 +166,45 @@ class TrainingExportTests(unittest.TestCase):
             settings = {"num_qubits": 2, "hz": 0.7, "Jz": 1.2, "leak_rate": 0.2,
                         "optimizer": "Adam", "epochs": 8, "learning_rate": 0.01,
                         "adam_betas": list(training.ADAM_BETAS), "adam_eps": training.ADAM_EPS,
-                        "batch_size": 5, "seed": training.SEED}
-            esn_dir = results_dir / "results_size_4_leak_rate_0.2"
-            quantum_dir = results_dir / "results_n_2_hz_0.7_jz_1.2_leak_rate_0.2"
-            self.assertEqual(set(results_dir.iterdir()), {esn_dir, quantum_dir})
+                        "batch_size": 5, "seed": training.SEED,
+                        "input_std_epsilon": training.INPUT_STD_EPS,
+                        "esn_input_gain": training.ESN_INPUT_GAIN,
+                        "quantum_input_gain": training.QUANTUM_INPUT_GAIN}
+            train_frames = np.concatenate([X[i] for i in train_indices]).astype(np.float64)
+            expected_mean = train_frames.mean(axis=0)
+            expected_std = train_frames.std(axis=0)
+            expected_std[expected_std < training.INPUT_STD_EPS] = 1.0
+            esn_path = results_dir / "esn_size_4_leak_rate_0.2.npz"
+            quantum_path = results_dir / "qr_n_2_hz_0.7_jz_1.2_leak_rate_0.2.npz"
+            results_path = results_dir / "results.json"
+            # A run creates exactly three files and no model subdirectories.
+            self.assertEqual(set(results_dir.iterdir()), {esn_path, quantum_path, results_path})
+            self.assertTrue(all(path.is_file() for path in results_dir.iterdir()))
+            saved_benchmarks = json.loads(results_path.read_text())
+            self.assertEqual(saved_benchmarks, json.loads(json.dumps(metrics)))
 
             expected = {}
-            for name, original_name, result_dir in (
-                ("ESN", "Classical ESN", esn_dir),
-                ("Quantum", "Quantum", quantum_dir),
+            for name, original_name, params_path in (
+                ("ESN", "Classical ESN", esn_path),
+                ("Quantum", "Quantum", quantum_path),
             ):
-                # Training saves only the final benchmark JSON and model parameters.
-                self.assertEqual({p.name for p in result_dir.iterdir()}, {"params.npz", "results.json"})
-                saved_results = json.loads((result_dir / "results.json").read_text())
-                self.assertEqual(saved_results, json.loads(json.dumps(metrics[original_name])))
+                # The shared benchmark file retains each model's actual settings.
+                saved_results = saved_benchmarks[original_name]
                 for key, value in settings.items():
                     self.assertEqual(saved_results["params"][key], value)
                 if name == "ESN":
                     self.assertEqual(saved_results["params"]["reservoir_size"], 4)
                 model = models[original_name]
                 expected[name] = [video.numpy() for video in predict(model, X_test)]
-                with np.load(result_dir / "params.npz", allow_pickle=False) as archive:
+                with np.load(params_path, allow_pickle=False) as archive:
                     # Both archives and metrics retain the actual configured settings.
                     metadata = json.loads(archive["metadata"].item())
                     self.assertEqual(metadata["hyperparameters"], settings)
+                    # Statistics must exclude held-out videos and survive Torch-free loading.
+                    np.testing.assert_array_equal(archive["input_mean"], expected_mean)
+                    np.testing.assert_array_equal(archive["input_std"], expected_std)
+                    self.assertEqual(metadata["input_preprocessing"],
+                                     saved_results["params"]["input_preprocessing"])
                     for key, value in settings.items():
                         self.assertEqual(archive[key].tolist(), value)
                     config = metadata["model_config"]
@@ -191,8 +246,8 @@ import main_numpy
 from video_data import save_videos
 
 root = Path(sys.argv[2])
-main_numpy.ESN_PARAMS = root / 'results/results_size_4_leak_rate_0.2/params.npz'
-main_numpy.QUANTUM_PARAMS = root / 'results/results_n_2_hz_0.7_jz_1.2_leak_rate_0.2/params.npz'
+main_numpy.ESN_PARAMS = root / 'results/esn_size_4_leak_rate_0.2.npz'
+main_numpy.QUANTUM_PARAMS = root / 'results/qr_n_2_hz_0.7_jz_1.2_leak_rate_0.2.npz'
 main_numpy.DATASET_PATH = root / 'final_dataset.pkl'
 predictions, metrics = main_numpy.main()
 for name, videos in predictions.items():

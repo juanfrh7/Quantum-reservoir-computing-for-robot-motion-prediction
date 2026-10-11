@@ -5,8 +5,8 @@ from pathlib import Path
 import numpy as np
 import torch
 from reservoirs import ESNReservoir, QiskitQuantumReservoir
-from utils import evaluate, export_numpy_checkpoint, make_loader, reservoir_features, train_readout
-from video_data import load_dataset, split_video_indices, validate_pairs
+from utils import configure_input_normalization, evaluate, export_numpy_checkpoint, make_loader, reservoir_features, train_readout
+from video_data import fit_input_normalization, load_dataset, split_video_indices, validate_pairs
 
 # All experiment settings are defined here.
 BATCH_SIZE = 64
@@ -15,6 +15,9 @@ EPOCHS = 100
 LEARNING_RATE = 1e-3
 ADAM_BETAS = (0.9, 0.999)
 ADAM_EPS = 1e-8
+INPUT_STD_EPS = 1e-8
+ESN_INPUT_GAIN = 1.0
+QUANTUM_INPUT_GAIN = 1.0  # Strength of the standardized input in RY rotation angles.
 BASE_DIR = Path(__file__).resolve().parent
 print(f"Working directory: {BASE_DIR}", flush=True)
 RESULTS_DIR = BASE_DIR / "results"
@@ -92,6 +95,11 @@ def main(X=None, y=None):
 
     # 3. Define the fixed reservoirs with the same settings as the diagnostic.
     models, model_configs = build_models(X[0].shape[-1], y[0].shape[-1])
+    # Fit on training frames only; raw validation/test inputs use the same fixed transform.
+    input_mean, input_std = fit_input_normalization(X_train, INPUT_STD_EPS)
+    for name, model in models.items():
+        gain = ESN_INPUT_GAIN if name == "Classical ESN" else QUANTUM_INPUT_GAIN
+        configure_input_normalization(model, input_mean, input_std, gain)
     # Record the experiment settings in both exports; quantum uses leak_rate as damping.
     hyperparameters = {
         "num_qubits": NUM_QUBITS,
@@ -105,12 +113,15 @@ def main(X=None, y=None):
         "adam_eps": ADAM_EPS,
         "batch_size": BATCH_SIZE,
         "seed": SEED,
+        "input_std_epsilon": INPUT_STD_EPS,
+        "esn_input_gain": ESN_INPUT_GAIN,
+        "quantum_input_gain": QUANTUM_INPUT_GAIN,
     }
-    # Give each model's final parameters and benchmarks a descriptive folder.
-    result_dirs = {
-        "Classical ESN": RESULTS_DIR / f"results_size_{ESN_SIZE}_leak_rate_{LEAK_RATE}",
+    # Save both checkpoints directly in results/ with their settings in the filenames.
+    param_paths = {
+        "Classical ESN": RESULTS_DIR / f"esn_size_{ESN_SIZE}_leak_rate_{LEAK_RATE}.npz",
         "Quantum": RESULTS_DIR / (
-            f"results_n_{NUM_QUBITS}_hz_{HZ}_jz_{JZ}_leak_rate_{LEAK_RATE}"
+            f"qr_n_{NUM_QUBITS}_hz_{HZ}_jz_{JZ}_leak_rate_{LEAK_RATE}.npz"
         ),
     }
     results = {}
@@ -131,19 +142,23 @@ def main(X=None, y=None):
 
         # 6. Score the test split once with the selected readout; save final results only.
         results[name] = {
-            "params": {**model_configs[name], **hyperparameters},
+            "params": {**model_configs[name], **hyperparameters,
+                       "input_preprocessing": model.input_preprocessing},
             "best_epoch": fitted["best_epoch"],
             "validation": fitted["validation"],
             "test": evaluate(model, X_test, y_test, BATCH_SIZE),
         }
         model_type = "esn" if name == "Classical ESN" else "quantum"
-        result_dir = result_dirs[name]
         export_numpy_checkpoint(
-            model, result_dir / "params.npz", model_type, model_configs[name],
+            model, param_paths[name], model_type, model_configs[name],
             hyperparameters=hyperparameters,
         )
-        (result_dir / "results.json").write_text(json.dumps(results[name], indent=2) + "\n")
-        print(f"Saved parameters and final benchmarks: {result_dir}", flush=True)
+        print(f"Saved parameters: {param_paths[name]}", flush=True)
+
+    # Keep both models' final benchmarks and settings together in one JSON file.
+    results_path = RESULTS_DIR / "results.json"
+    results_path.write_text(json.dumps(results, indent=2) + "\n")
+    print(f"Saved final benchmarks: {results_path}", flush=True)
 
     # 7. Print the comparison; return models and metrics for later use.
     print("\nModel            Val loss      Val MAE       Test loss     Test MAE")

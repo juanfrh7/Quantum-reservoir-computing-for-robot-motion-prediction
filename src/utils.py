@@ -126,6 +126,31 @@ def train_readout(model, train, validation, epochs=100, learning_rate=1e-3,
             "validation": cached_metrics(model, validation)}
 
 
+@torch.no_grad()
+def configure_input_normalization(model, mean, std, input_gain=1.0):
+    """Fold training-set standardization and gain into w_in so callers use raw inputs."""
+    if hasattr(model, "input_preprocessing"):
+        raise ValueError("Input normalization has already been configured for this model.")
+    mean, std = np.asarray(mean, dtype=np.float64), np.asarray(std, dtype=np.float64)
+    if (mean.shape != (model.input_dim,) or std.shape != mean.shape
+            or not np.isfinite(mean).all() or not np.isfinite(std).all()
+            or np.any(std <= 0) or not np.isfinite(input_gain) or input_gain <= 0):
+        raise ValueError("Expected finite input statistics, positive std, and positive input_gain.")
+    device = model.w_in.weight.device
+    mean_tensor = torch.as_tensor(mean, device=device)
+    std_tensor = torch.as_tensor(std, device=device)
+    # W * (gain * (x - mean) / std) + b equals W_folded * x + b_folded.
+    weight = model.w_in.weight.double() * input_gain / std_tensor
+    bias = model.w_in.bias.double() - weight @ mean_tensor
+    model.w_in.weight.copy_(weight)
+    model.w_in.bias.copy_(bias)
+    model.w_in.requires_grad_(False)
+    model.input_preprocessing = {
+        "method": "training_zscore", "folded_into": "w_in",
+        "mean": mean.tolist(), "std": std.tolist(), "input_gain": float(input_gain),
+    }
+
+
 def export_numpy_checkpoint(model, path, model_type, model_config, hyperparameters=None):
     """Export weights, model configuration, and optional experiment settings."""
     # Include fixed reservoir parameters as well as the fitted readout.
@@ -138,14 +163,19 @@ def export_numpy_checkpoint(model, path, model_type, model_config, hyperparamete
     # Save settings as directly readable NumPy scalars and inside the JSON metadata.
     hyperparameters = {} if hyperparameters is None else dict(hyperparameters)
     parameters.update({name: np.array(value) for name, value in hyperparameters.items()})
-    metadata = json.dumps({
+    metadata = {
         "format_version": 1, "model_type": model_type, "model_config": model_config,
         "hyperparameters": hyperparameters,
-    })
+    }
+    if hasattr(model, "input_preprocessing"):
+        # The exported projection already applies normalization; keep statistics for inspection.
+        metadata["input_preprocessing"] = model.input_preprocessing
+        parameters["input_mean"] = np.asarray(model.input_preprocessing["mean"])
+        parameters["input_std"] = np.asarray(model.input_preprocessing["std"])
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("wb") as output:
-        np.savez_compressed(output, metadata=np.array(metadata), **parameters)
+        np.savez_compressed(output, metadata=np.array(json.dumps(metadata)), **parameters)
 
 
 @torch.no_grad()

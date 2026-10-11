@@ -12,10 +12,20 @@ import numpy as np
 import main_numpy
 from reservoirs_numpy import ESNReservoir, QuantumReservoir
 from utils_numpy import evaluate, predict, reservoir_features
-from video_data import frame_metrics, load_dataset, load_videos, save_videos, validate_pairs
+from video_data import fit_input_normalization, frame_metrics, load_dataset, load_videos, save_videos, validate_pairs
 
 
 class VariableVideoTests(unittest.TestCase):
+    def test_input_statistics_weight_real_frames(self):
+        """Estimate training statistics per actual frame and handle constant features."""
+        # A three-frame video contributes three times as much as a one-frame video.
+        videos = [np.array([[1.0, 5.0]]), np.array([[3.0, 5.0]] * 3)]
+        mean, std = fit_input_normalization(videos)
+        np.testing.assert_array_equal(mean, [2.5, 5.0])
+        np.testing.assert_allclose(std, [np.sqrt(0.75), 1.0])
+        with self.assertRaises(ValueError):
+            fit_input_normalization(videos, min_std=0)
+
     def models(self):
         """Build small reservoirs with different input and decision widths."""
         # Multiple substeps also exercise feature ordering on short videos.

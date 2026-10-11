@@ -1,0 +1,74 @@
+{
+  "Classical ESN": {
+    "params": {
+      "input_dim": 19,
+      "output_dim": 7,
+      "reservoir_size": 100,
+      "leak_rate": 0.3,
+      "spectral_radius": 0.9,
+      "time_step": 1,
+      "num_qubits": 6,
+      "hz": 1.0,
+      "Jz": 10,
+      "optimizer": "Adam",
+      "epochs": 100,
+      "learning_rate": 0.001,
+      "adam_betas": [
+        0.9,
+        0.999
+      ],
+      "adam_eps": 1e-08,
+      "batch_size": 64,
+      "seed": 42
+    },
+    "best_epoch": 99,
+    "validation": {
+      "loss": 0.04881626236836066,
+      "mae": 0.12044288762161796
+    },
+    "test": {
+      "loss": 0.058002388875678774,
+      "mae": 0.12754455670682427
+    }
+  },
+  "Quantum": {
+    "params": {
+      "input_dim": 19,
+      "output_dim": 7,
+      "num_qubits": 6,
+      "hz": 1.0,
+      "Jz": 10,
+      "interaction": "XX",
+      "single_observables": [
+        "Z",
+        "X"
+      ],
+      "pair_observables": [
+        "ZZ",
+        "XX"
+      ],
+      "damping": 0.3,
+      "coupling_seed": 42,
+      "leak_rate": 0.3,
+      "optimizer": "Adam",
+      "epochs": 100,
+      "learning_rate": 0.001,
+      "adam_betas": [
+        0.9,
+        0.999
+      ],
+      "adam_eps": 1e-08,
+      "batch_size": 64,
+      "seed": 42
+    },
+    "best_epoch": 99,
+    "validation": {
+      "loss": 0.16440354119586897,
+      "mae": 0.23415564968379265
+    },
+    "test": {
+      "loss": 0.1649435282326009,
+      "mae": 0.2287837783568311
+    }
+  }
+}

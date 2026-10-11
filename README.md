@@ -81,6 +81,20 @@ features and aligned targets are cached once per split over real frames.
 Set `EPOCHS`, `LEARNING_RATE`, `ADAM_BETAS`, `ADAM_EPS`, `BATCH_SIZE`, and `SEED`
 at the top of `src/main.py`. Validation and test targets are excluded from updates.
 
+Inputs are standardized per feature using the mean and standard deviation of
+real training frames only. Constant features use a scale of 1. Both reservoirs
+use these same statistics. Set `ESN_INPUT_GAIN` and `QUANTUM_INPUT_GAIN` to control
+the strength of the standardized signal; the quantum gain controls input rotation
+angles. `INPUT_STD_EPS` sets the threshold for treating a feature as constant.
+Targets keep their original units.
+
+Standardization and gain are folded into the fixed input weights and bias.
+Always pass raw inputs to training and prediction, including direct model calls;
+do not standardize them again. Each checkpoint saves `input_mean`, `input_std`,
+and `input_preprocessing` metadata, also recorded in the results JSON. NumPy
+evaluation uses the exported projection directly. Retrain existing models to
+use the new preprocessing.
+
 Training prints training/validation MSE and MAE at epoch 0 and after every epoch.
 The weights with the lowest validation MSE are restored before scoring the test
 split once. Epoch 0 can be selected if training does not improve validation MSE.
@@ -89,33 +103,32 @@ Source files use plain imports. For interactive calls, add `src/` to your
 Python import path or open your interpreter there. Running `src/main.py` directly
 from your editor also works.
 
-Training saves two files per model under `src/results/`. With the default settings:
+Training saves two named checkpoints and one shared benchmark file directly under
+`src/results/`. With the default settings:
 
 ```text
 results/
-  results_size_100_leak_rate_0.3/
-    params.npz
-    results.json
-  results_n_6_hz_1.0_jz_10_leak_rate_0.3/
-    params.npz
-    results.json
+  esn_size_100_leak_rate_0.3.npz
+  qr_n_6_hz_1.0_jz_10_leak_rate_0.3.npz
+  results.json
 ```
 
-`params.npz` contains fitted readouts, fixed reservoir parameters, and the model
+Each `.npz` contains fitted readouts, fixed reservoir parameters, and the model
 configuration. Both checkpoints also retain `num_qubits`, `hz`, `Jz`, and
 `leak_rate` as scalar arrays and in their JSON metadata. Quantum `damping` uses
 `leak_rate`.
 
-Each `results.json` contains `params` (model settings, split seed, and Adam
-settings), `best_epoch`, and final `validation` and `test` benchmarks with MSE
-(`loss`) and MAE. Adam settings are also recorded in the checkpoint metadata.
-Only `params.npz` and `results.json` are saved per model.
+`results.json` contains entries for `Classical ESN` and `Quantum`, each with
+`params` (model settings, split seed, and Adam settings), `best_epoch`, and final
+`validation` and `test` benchmarks with MSE (`loss`) and MAE. Adam settings are
+also recorded in the checkpoint metadata. A run saves only these three files;
+the shared JSON describes the latest run.
 
 ## Evaluate with NumPy only
 
-Install NumPy in the evaluation environment. Copy the selected results folders
+Install NumPy in the evaluation environment. Copy the selected `.npz` checkpoints
 and dataset to the evaluation machine. Set `ESN_PARAMS` and `QUANTUM_PARAMS` in
-`src/main_numpy.py` to the chosen `params.npz` files. Set `DATASET_PATH` there to
+`src/main_numpy.py` to the chosen `.npz` files. Set `DATASET_PATH` there to
 the same `final_dataset.pkl`. It loads the original dataset
 and recreates the test split using the same NumPy shuffle and `SEED` as training:
 
@@ -152,7 +165,7 @@ evolution, observable measurement, and damping. State memory scales as
 Float32 training and float64 inference may differ slightly due to rounding.
 
 Existing model `.npz` checkpoints remain compatible. Run training again to
-create the new named results folders and benchmarks. Older runs used a Torch
+create the named checkpoints and shared benchmarks. Older runs used a Torch
 shuffle; the recreated NumPy test split applies to new runs.
 
 ## Verification
