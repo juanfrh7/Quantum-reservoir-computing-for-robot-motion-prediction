@@ -41,8 +41,8 @@ source HDF5 dataset. It contains:
 
 `video_data.load_dataset` extracts each video's numeric value matrices and
 checks matching time steps. The time-step lists are metadata, not model inputs.
-The current Lift dataset has 200 videos, 36–64 frames per video, 19 input
-features, and 7 action targets per frame.
+Video counts, frame counts, and vector widths come from the saved dataset.
+The entry points print these dimensions when loading it.
 
 For other datasets, the utility functions also support `.npz` archives with one numeric array per video,
 keyed `video_000000`, `video_000001`, and so on. They load without pickle:
@@ -73,7 +73,7 @@ models, metrics = train(X, y)
 
 Calling `train()` without arguments loads `src/dataset/final_dataset.pkl`.
 Set `DATASET_PATH` in `src/main.py` to use another notebook-format pickle.
-The script splits by video into 70% training, 15% validation, and 15% test sets:
+The script splits by video into 70% training, 15% validation, and 15% test sets.
 For example, 200 videos give 140/30/30. Frames from a video stay in one split.
 
 Only `w_out` and its bias are trained with Adam, minimizing MSE. Reservoir

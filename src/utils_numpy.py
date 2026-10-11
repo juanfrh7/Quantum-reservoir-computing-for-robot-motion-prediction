@@ -1,6 +1,5 @@
 """NumPy-only feature extraction, prediction, and metrics."""
 import numpy as np
-
 from video_data import as_videos, batch_indices, frame_metrics, validate_pairs
 
 
