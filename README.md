@@ -1,6 +1,169 @@
-# hackathon
+# Documentation
 
-## Video inputs and decision targets
+# 1. Input Data
+
+## 1.1 Source: robomimic Lift (Proficient-Human), `low_dim_v15.hdf5`
+
+The data comes from robomimic, a framework and benchmark for robot learning from demonstration developed by the Stanford Vision and Learning Lab as part of the ARISE Initiative. robomimic is released under the MIT License (Copyright © 2021 Stanford Vision and Learning Lab).
+
+| | |
+|---|---|
+| Library | robomimic, <https://github.com/ARISE-Initiative/robomimic> |
+| Dataset documentation | <https://robomimic.github.io/docs/v0.3/datasets/robomimic_v0.1.html> |
+| Task | **Lift**: a Franka Panda robotic arm grasps a small cube on a table and lifts it |
+| Demonstrator type | **Proficient-Human (PH)**: one experienced operator teleoperating the robot via RoboTurk; 200 successful demonstrations |
+| File used | `lift/ph/low_dim_v15.hdf5` (low-dimensional observations, no images) |
+| File size | ~21 MB |
+
+**Reference.** If you use this dataset, please cite the original robomimic paper:
+
+> A. Mandlekar, D. Xu, J. Wong, S. Nasiriany, C. Wang, R. Kulkarni, L. Fei-Fei, S. Savarese, Y. Zhu, and R. Martín-Martín, "What Matters in Learning from Offline Human Demonstrations for Robot Manipulation," *Conference on Robot Learning (CoRL)*, 2021. [arXiv:2108.03298](https://arxiv.org/abs/2108.03298)
+
+**Version note.** The demonstrations were recorded in the robosuite simulator (MuJoCo physics), environment version 1.5.1, as stored in the file's env_args metadata. This is why the file is named `low_dim_v15.hdf5` rather than the `low_dim_v141.hdf5` listed on the v0.3 documentation page. Neither robomimic nor robosuite is a runtime dependency of this project: they were used only to obtain and inspect the original file, and the pipeline reads it directly with h5py.
+
+## 1.2 The task
+
+At the start of each episode the cube is placed at a slightly randomized position on the table. The operator moves the end effector (the gripper) above the cube, descends, closes the gripper, and lifts the cube. An episode counts as successful once the cube is raised above a height threshold.
+
+- **Control frequency:** 20 Hz, so one time step is 50 ms. A demo of 48 steps (the average) lasts about 2.4 s.
+- **Controller:** Operational Space Control (`OSC_POSE`) in **delta** mode. Each action is a small displacement and rotation of the end effector relative to its current pose, not an absolute target.
+- **Reward:** sparse. The reward is 1 only while the cube is lifted. Every demo ends with 5–6 such success steps (`rewards` and `dones` sum to 5 or 6 per demo).
+
+## 1.3 Original file structure (HDF5)
+
+Besides arrays, HDF5 groups can carry small **metadata attributes** (marked "metadata:" in the tree). They describe the group itself rather than holding training data. This project only reads `env_args`, to confirm the task is `"Lift"`.
+
+```
+low_dim_v15.hdf5
+├── data/                      metadata: environment settings (env_args, JSON text),
+│   │                                    total time steps across all demos (total = 9666)
+│   ├── demo_0/                metadata: time steps in this demo (num_samples = T),
+│   │   │                                MuJoCo scene description (model_file, XML text)
+│   │   ├── obs/               observations at time t
+│   │   │   ├── robot0_eef_pos          (T, 3)
+│   │   │   ├── robot0_eef_quat         (T, 4)
+│   │   │   ├── robot0_gripper_qpos     (T, 2)
+│   │   │   ├── object                  (T, 10)
+│   │   │   ├── robot0_eef_quat_site    (T, 4)    ┐
+│   │   │   ├── robot0_gripper_qvel     (T, 2)    │
+│   │   │   ├── robot0_joint_pos        (T, 7)    │ present in the file,
+│   │   │   ├── robot0_joint_pos_cos    (T, 7)    │ NOT used in this project
+│   │   │   ├── robot0_joint_pos_sin    (T, 7)    │
+│   │   │   └── robot0_joint_vel        (T, 7)    ┘
+│   │   ├── next_obs/          same keys, shifted by one step (obs at t+1)
+│   │   ├── actions            (T, 7)
+│   │   ├── rewards            (T,)
+│   │   ├── dones              (T,)
+│   │   └── states             (T, 32)   full MuJoCo simulator state
+│   ├── demo_1/
+│   ├── ...
+│   └── demo_199/
+└── mask/                      predefined train/validation splits (lists of demo names)
+    ├── train (180)            valid (20)
+    ├── 50_percent (100)       50_percent_train (90)   50_percent_valid (10)
+    └── 20_percent (40)        20_percent_train (36)   20_percent_valid (4)
+```
+
+Each demo is an independent episode with its own length `T`. The listing below shows a few demos and the arrays used by this project:
+
+```
+demo_1:   58 time steps | robot0_eef_pos (58, 3), robot0_eef_quat (58, 4), robot0_gripper_qpos (58, 2), object (58, 10), actions (58, 7)
+demo_10:  54 time steps | robot0_eef_pos (54, 3), robot0_eef_quat (54, 4), robot0_gripper_qpos (54, 2), object (54, 10), actions (54, 7)
+demo_100: 47 time steps | robot0_eef_pos (47, 3), robot0_eef_quat (47, 4), robot0_gripper_qpos (47, 2), object (47, 10), actions (47, 7)
+demo_101: 43 time steps | robot0_eef_pos (43, 3), robot0_eef_quat (43, 4), robot0_gripper_qpos (43, 2), object (43, 10), actions (43, 7)
+demo_102: 58 time steps | robot0_eef_pos (58, 3), robot0_eef_quat (58, 4), robot0_gripper_qpos (58, 2), object (58, 10), actions (58, 7)
+```
+
+Dataset-wide statistics:
+
+| Quantity | Value |
+|---|---|
+| Number of demos | 200 (`demo_0` … `demo_199`) |
+| Time steps per demo | min 36, max 64, mean 48.3 |
+| Total time steps | 9,666 |
+| Missing values (NaN) | none |
+
+> **Ordering.** HDF5 lists keys alphabetically (`demo_1, demo_10, demo_100, demo_101, …`), which is the order in the listing above. The loading notebook re-sorts the demos numerically (`demo_0, demo_1, demo_2, …`).
+
+## 1.4 Variables used
+
+### Inputs: 19 features per time step (robot and object state)
+
+| HDF5 key | Dim | Column names | Meaning |
+|---|---|---|---|
+| `robot0_eef_pos` | 3 | `eef_x, eef_y, eef_z` | End-effector (gripper) position in the world frame [m] |
+| `robot0_eef_quat` | 4 | `eef_qx, eef_qy, eef_qz, eef_qw` | End-effector orientation as a unit quaternion (x, y, z, w) |
+| `robot0_gripper_qpos` | 2 | `finger_1, finger_2` | Positions of the two finger joints [m]. They are approximately mirror images (`finger_2 ≈ −finger_1`); values range from about 0.02 to 0.04 in magnitude |
+| `object[0:3]` | 3 | `cube_x, cube_y, cube_z` | Cube position [m] |
+| `object[3:7]` | 4 | `cube_qx, cube_qy, cube_qz, cube_qw` | Cube orientation as a quaternion |
+| `object[7:10]` | 3 | `grip2cube_x, grip2cube_y, grip2cube_z` | Relative vector from the gripper to the cube. Checked numerically to equal `cube_pos − eef_pos` exactly |
+
+### Targets: 7 values per time step (the operator's action)
+
+| Column | Meaning | Range in the data |
+|---|---|---|
+| `act_dx, act_dy, act_dz` | Commanded end-effector translation, normalized to [−1, 1] (±1 maps to ±5 cm per step) | [−1, 1] |
+| `act_drx, act_dry, act_drz` | Commanded end-effector rotation (axis-angle), normalized to [−1, 1] (±1 maps to ±0.5 rad per step) | about [−1, 0.48] |
+| `act_grip` | Gripper command: −1 = open, +1 = close | exactly {−1, +1} (binary) |
+
+The learning problem is therefore **behavior cloning as sequence regression**: given the state sequence up to time *t*, predict the action the human took at time *t*. The gripper target is binary, while the other six are continuous.
+
+**Redundancy note.** Some inputs are redundant: `grip2cube_*` is an exact linear combination of `cube_*` and `eef_*`, and the two finger coordinates are nearly mirror images, this means the 19 inputs carry fewer than 19 independent degrees of freedom. 
+
+## 1.5 From HDF5 to nested lists (`dataset_generation.ipynb`)
+
+The notebook `dataset_generation.ipynb` converts the HDF5 file into plain Python nested lists. It does **no padding and no masking**: every demo keeps its own length. Required packages: `h5py`, `numpy`, `pandas`.
+
+### Settings
+
+| Setting | Default | Effect |
+|---|---|---|
+| `DATASET` | `~/ionQ/robomimic/datasets/lift/ph/low_dim_v15.hdf5` | Path to the raw file |
+| `N_DEMOS` | `200` | Number of demos to load |
+| `SPLIT` | `None` | `None` = all 200 demos. Alternatively, one of the predefined masks (`"train"`, `"valid"`, `"20_percent_train"`, …) |
+| `RANDOM`, `SEED` | `False`, `0` | Take the first `N_DEMOS` demos in numeric order, or draw them at random with the given seed |
+| `TIME_STARTS_AT` | `1` | Time steps are numbered 1, 2, …, T (set to 0 for 0-based numbering) |
+| `STATE_KEYS` | `eef_pos, eef_quat, gripper_qpos, object` | Observation groups concatenated into the 19 inputs, in this order |
+
+### What the notebook `dataset_generation.ipynb` does
+
+The notebook opens the HDF5 file, checks that it contains the Lift task, and selects which demos to load (by default all 200, in numeric order). For each demo it joins the four observation groups into one table of 19 input values per time step and takes the 7 action values as targets. Inputs and targets are paired at the same time step: the input is the state the operator saw, and the target is the action they then issued. It then checks that every demo is consistent (matching lengths, 19 inputs and 7 targets per step, no missing values) and saves the result, together with the column names and demo names, to a pickle file (`~/ionQ/lift_lists.pkl` by default).
+
+### Resulting structure
+
+```
+inputs  = [video_1, video_2, ..., video_N]        # one element per demo (N = 200)
+video_i = [time_steps, values]
+    time_steps = [1, 2, ..., T_i]                 # T_i in [36, 64], differs per demo
+    values     = [[19 floats at step 1],
+                  [19 floats at step 2],
+                  ...]                            # T_i rows
+
+targets = [video_1, ..., video_N]                 # same structure, 7 floats per step
+
+input_keys  = ["eef_x", "eef_y", "eef_z", "eef_qx", ..., "grip2cube_z"]   # 19 names
+target_keys = ["act_dx", "act_dy", "act_dz", "act_drx", "act_dry", "act_drz", "act_grip"]
+demo_names  = ["demo_0", "demo_1", ...]
+```
+
+Example (`demo_0`, 59 steps, first time step):
+
+```
+t = 1
+inputs : [-0.0905, -0.0152, 1.0118, 0.9972, -0.0072, 0.0740, 0.0019, 0.0208, -0.0208,
+           0.0264,  0.0270, 0.8314, 0.0000,  0.0000, 0.9691, 0.2466, 0.1169,  0.0422, -0.1804]
+targets: [-0.0, 0.0, 0.0, 0.0038, 0.1482, 0.0145, -1.0]
+```
+
+## 1.6 Licensing
+
+| Component | Role in this project | License |
+|---|---|---|
+| robomimic (ARISE-Initiative/robomimic) | Source of the Lift PH dataset and its format | MIT |
+| robosuite (ARISE-Initiative/robosuite) | Simulator that generated the demonstrations | MIT |
+
+
+## 2.Video inputs and decision targets
 
 Videos can have different frame counts. Pass them as lists of NumPy arrays:
 
