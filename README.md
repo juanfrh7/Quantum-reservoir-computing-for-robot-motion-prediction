@@ -12,7 +12,7 @@ First, n qubits live in a 2<sup>n</sup>-dimensional state space, so a handful of
 
 We use the **Lift** task from the robomimic benchmark, where a Franka Panda robot arm picks up a cube from a table. The dataset (`low_dim_v15.hdf5`) has 200 demonstrations recorded by a human operator. At each time step, 19 numbers describe the scene: where the gripper is and how it's oriented, how open its fingers are, and where the cube is relative to the gripper. The target is the operator's action at that step, 7 numbers that say how to move and rotate the gripper and whether to open or close it. In short, the model watches the states so far and must guess what the human did next.
 
-### Why quantum reservoirs for this dataset
+### Why quantum reservoirs for this dataset?
 
 This task is a natural fit for reservoir computing. The right action depends not just on the current state but on where we are in the motion (approaching, grasping or lifting), so the model needs memory. The mapping is also partly nonlinear: the gripper command, for example, flips suddenly from "open" to "close" once the gripper reaches the cube, a jump that a weighted sum of the inputs can't reproduce. And with only 19 inputs, the problem is small enough to encode into a few qubits, which makes it a realistic target for today's quantum hardware
 
