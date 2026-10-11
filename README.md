@@ -21,7 +21,7 @@ This task is a natural fit for reservoir computing. The right action depends not
 
 ### Source: robomimic Lift (Proficient-Human), `low_dim_v15.hdf5`
 
-The data comes from robomimic, a framework and benchmark for robot learning from demonstration developed by the Stanford Vision and Learning Lab as part of the ARISE Initiative. robomimic is released under the MIT License (Copyright © 2021 Stanford Vision and Learning Lab).
+The data comes from robomimic, a framework and benchmark for robot learning from demonstration developed by the Stanford Vision and Learning Lab as part of the ARISE Initiative. 
 
 | | |
 |---|---|
