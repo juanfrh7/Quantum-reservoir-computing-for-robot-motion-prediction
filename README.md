@@ -252,6 +252,8 @@ the demo and prints `Largest difference between its readout weights and the ones
 | `scaling_core_all_w2.py` | progress for every qubit number | a figure and `tuned_params.json` in `results/scaling_core_all_w2/` |
 | the unit tests | `Ran 22 tests` and `OK` | nothing |
 
+**Note:** `scaling_tuned.py` and `scaling_core_all_w2.py` (GitHub only) are tuning studies that compare the quantum reservoir with the ESN as both grow. `scaling_tuned.py` tunes every model per size (2–6 qubits, 5–300 neurons) for five sets of measured observables, using a fast simulator checked against the Qiskit reservoir. `scaling_core_all_w2.py` repeats the study for the best set (all one- and two-qubit Paulis) up to 8 qubits with wider parameter ranges, running the Qiskit reservoir directly, and saves the tuned parameters per qubit number to a JSON file. Both need PyTorch and Qiskit.
+
 `train_readout.py` prints:
 
 ```
