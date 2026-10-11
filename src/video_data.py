@@ -85,13 +85,18 @@ def load_dataset(path, dtype=np.float64):
     return validate_pairs(X, y, input_dim, output_dim, dtype)
 
 
-def split_video_indices(n_videos, seed=42):
-    """Return reproducible 70/15/15 video splits using only NumPy."""
+def split_video_indices(n_videos, seed=42, train_fraction=0.7, val_fraction=0.15):
+    """Return reproducible video splits using NumPy; defaults are 70/15/15."""
     # Training and standalone evaluation recreate the same held-out videos.
     if n_videos < 10:
         raise ValueError("At least 10 videos are required for train/validation/test splits.")
+    if not (0 < train_fraction < 1 and 0 < val_fraction < 1 - train_fraction):
+        raise ValueError("Train and validation fractions must leave a positive test fraction.")
     indices = np.random.default_rng(seed).permutation(n_videos)
-    train_end, val_end = int(0.7 * n_videos), int(0.85 * n_videos)
+    train_end = int(train_fraction * n_videos)
+    val_end = int((train_fraction + val_fraction) * n_videos)
+    if not 0 < train_end < val_end < n_videos:
+        raise ValueError("Split fractions must give at least one video per split.")
     return indices[:train_end], indices[train_end:val_end], indices[val_end:]
 
 

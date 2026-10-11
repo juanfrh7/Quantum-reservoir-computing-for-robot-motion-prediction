@@ -5,22 +5,65 @@ from pathlib import Path
 import numpy as np
 import torch
 from reservoirs import ESNReservoir, QiskitQuantumReservoir
-from utils import evaluate, export_numpy_checkpoint, fit_readout, make_loader, reservoir_features
+from utils import evaluate, export_numpy_checkpoint, make_loader, reservoir_features, train_readout
 from video_data import load_dataset, split_video_indices, validate_pairs
 
 # All experiment settings are defined here.
 BATCH_SIZE = 64
 SEED = 42
-RIDGE = 0.0  # 0 = least squares; positive values regularize the readout weights.
+EPOCHS = 100
+LEARNING_RATE = 1e-3
+ADAM_BETAS = (0.9, 0.999)
+ADAM_EPS = 1e-8
 BASE_DIR = Path(__file__).resolve().parent
 print(f"Working directory: {BASE_DIR}", flush=True)
 RESULTS_DIR = BASE_DIR / "results"
 DATASET_PATH = BASE_DIR / "dataset/final_dataset.pkl"
+
+# ESN hyperparameters
 ESN_SIZE = 100
-NUM_QUBITS = 4
-LEAK_RATE = 0.1
-hz = 1.0
-Jz = 10
+SPECTRAL_RADIUS = 0.9
+TIME_STEP = 1
+
+# Quantum hyperparameters
+NUM_QUBITS = 6
+LEAK_RATE = 0.3
+HZ = 1.0
+JZ = 10
+INTERACTION = "XX"
+SINGLE_OBSERVABLES = ("Z", "X")
+PAIR_OBSERVABLES = ("ZZ", "XX")
+
+def build_models(input_dim, output_dim):
+    """Build both reservoirs from the current settings for training or diagnostics."""
+    # Share configurations so the readout check exercises the actual experiment.
+    model_configs = {
+        "Classical ESN": {
+            "input_dim": input_dim,
+            "output_dim": output_dim,
+            "reservoir_size": ESN_SIZE,
+            "leak_rate": LEAK_RATE,
+            "spectral_radius": SPECTRAL_RADIUS,
+            "time_step": TIME_STEP,
+        },
+        "Quantum": {
+            "input_dim": input_dim,
+            "output_dim": output_dim,
+            "num_qubits": NUM_QUBITS,
+            "hz": HZ,
+            "Jz": JZ,
+            "interaction": INTERACTION,
+            "single_observables": SINGLE_OBSERVABLES,
+            "pair_observables": PAIR_OBSERVABLES,
+            "damping": LEAK_RATE,
+            "coupling_seed": SEED,
+        },
+    }
+    models = {
+        "Classical ESN": ESNReservoir(model_configs["Classical ESN"]),
+        "Quantum": QiskitQuantumReservoir(**model_configs["Quantum"]),
+    }
+    return models, model_configs
 
 
 def main(X=None, y=None):
@@ -46,48 +89,28 @@ def main(X=None, y=None):
 
     # 2. Batch aligned videos and decision targets.
     train_loader = make_loader(X_train, y_train, BATCH_SIZE)
-    input_dim = X[0].shape[-1]
-    output_dim = y[0].shape[-1]
 
-    # 3. Define the two reservoirs. Their inputs and dynamics are fixed.
-    model_configs = {
-        "Classical ESN": {
-            "input_dim": input_dim,
-            "output_dim": output_dim,
-            "reservoir_size": ESN_SIZE,
-            "leak_rate": LEAK_RATE,
-            "spectral_radius": 0.9,
-            "time_step": 1,
-        },
-        "Quantum": {
-            "input_dim": input_dim,
-            "output_dim": output_dim,
-            "num_qubits": NUM_QUBITS,
-            "hz": hz,
-            "Jz": Jz,
-            "interaction": "XX",
-            "single_observables": ("Z", "X"),
-            "pair_observables": ("ZZ", "XX"),
-            "damping": LEAK_RATE,
-            "coupling_seed": SEED,
-        },
-    }
-    models = {
-        "Classical ESN": ESNReservoir(model_configs["Classical ESN"]),
-        "Quantum": QiskitQuantumReservoir(**model_configs["Quantum"]),
-    }
+    # 3. Define the fixed reservoirs with the same settings as the diagnostic.
+    models, model_configs = build_models(X[0].shape[-1], y[0].shape[-1])
     # Record the experiment settings in both exports; quantum uses leak_rate as damping.
     hyperparameters = {
         "num_qubits": NUM_QUBITS,
-        "hz": hz,
-        "Jz": Jz,
+        "hz": HZ,
+        "Jz": JZ,
         "leak_rate": LEAK_RATE,
+        "optimizer": "Adam",
+        "epochs": EPOCHS,
+        "learning_rate": LEARNING_RATE,
+        "adam_betas": ADAM_BETAS,
+        "adam_eps": ADAM_EPS,
+        "batch_size": BATCH_SIZE,
+        "seed": SEED,
     }
     # Give each model's final parameters and benchmarks a descriptive folder.
     result_dirs = {
         "Classical ESN": RESULTS_DIR / f"results_size_{ESN_SIZE}_leak_rate_{LEAK_RATE}",
         "Quantum": RESULTS_DIR / (
-            f"results_n_{NUM_QUBITS}_hz_{hz}_jz_{Jz}_leak_rate_{LEAK_RATE}"
+            f"results_n_{NUM_QUBITS}_hz_{HZ}_jz_{JZ}_leak_rate_{LEAK_RATE}"
         ),
     }
     results = {}
@@ -98,14 +121,19 @@ def main(X=None, y=None):
         print(f"\n{name}: computing reservoir features", flush=True)
         train = reservoir_features(model, train_loader, BATCH_SIZE)
 
-        # 5. Solve for the optimal readout using only training frames/targets.
-        features, targets = train.dataset.tensors
-        fit_readout(model, features, targets, ridge=RIDGE)
+        validation_features = reservoir_features(
+            model, make_loader(X_val, y_val, BATCH_SIZE), BATCH_SIZE
+        )
 
-        # 6. Evaluate the final readout on validation and test splits.
+        # 5. Optimize w_out with Adam; keep the epoch with lowest validation MSE.
+        fitted = train_readout(model, train, validation_features, EPOCHS, LEARNING_RATE,
+                               ADAM_BETAS, ADAM_EPS, SEED, label=name)
+
+        # 6. Score the test split once with the selected readout; save final results only.
         results[name] = {
-            "params": {**model_configs[name], **hyperparameters, "seed": SEED, "ridge": RIDGE},
-            "validation": evaluate(model, X_val, y_val, BATCH_SIZE),
+            "params": {**model_configs[name], **hyperparameters},
+            "best_epoch": fitted["best_epoch"],
+            "validation": fitted["validation"],
             "test": evaluate(model, X_test, y_test, BATCH_SIZE),
         }
         model_type = "esn" if name == "Classical ESN" else "quantum"

@@ -477,3 +477,79 @@ class QiskitQuantumReservoir(torch.nn.Module):
         """Return the current density-matrix batch, or None after a video reset."""
         # Expose the live runtime state rather than a saved checkpoint parameter.
         return self.reservoir_state
+
+
+def check_readout_optimization(model, X, y, batch_size=64, epochs=100,
+                               learning_rate=1e-3, betas=(0.9, 0.999), eps=1e-8, seed=42):
+    """Check that Adam changes w_out, reduces training MSE, and preserves the reservoir."""
+    # Use training frames for this update diagnostic, not for held-out model selection.
+    from utils import cached_metrics, make_loader, reservoir_features, train_readout
+
+    original = {name: value.detach().clone() for name, value in model.state_dict().items()}
+    cached = reservoir_features(model, make_loader(X, y, batch_size), batch_size)
+    targets = cached.dataset.tensors[1].double()
+    mse_before = cached_metrics(model, cached)["loss"]
+    train_readout(model, cached, cached, epochs, learning_rate, betas, eps, seed, verbose=False)
+    mse_after = cached_metrics(model, cached)["loss"]
+    weight_change = float(torch.linalg.vector_norm(
+        model.w_out.weight.detach() - original["w_out.weight"]))
+    bias_change = float(torch.linalg.vector_norm(
+        model.w_out.bias.detach() - original["w_out.bias"]))
+    fixed_unchanged = all(torch.equal(value, original[name])
+                          for name, value in model.state_dict().items()
+                          if not name.startswith("w_out."))
+    trainable = all(parameter.requires_grad for parameter in model.w_out.parameters())
+    return {
+        "mse_before": mse_before,
+        "mse_after": mse_after,
+        "mean_baseline_mse": float((targets - targets.mean(dim=0)).square().mean()),
+        "weight_change": weight_change,
+        "bias_change": bias_change,
+        "readout_features": model.w_out.in_features,
+        "fixed_parameters_unchanged": fixed_unchanged,
+        "readout_trainable": trainable,
+        "passed": bool(trainable and fixed_unchanged and weight_change + bias_change > 0
+                       and mse_after < mse_before),
+    }
+
+
+def main():
+    """Check both readouts on the configured training split without saving files."""
+    # Reuse the dataset, seed, model settings, and Adam settings from main.py.
+    import main as training
+    from utils import evaluate
+    from video_data import load_dataset, split_video_indices
+
+    torch.manual_seed(training.SEED)
+    X, y = load_dataset(training.DATASET_PATH, dtype=np.float32)
+    train_indices, val_indices, test_indices = split_video_indices(len(X), training.SEED)
+    X_train, y_train = [X[i] for i in train_indices], [y[i] for i in train_indices]
+    models, _ = training.build_models(X[0].shape[1], y[0].shape[1])
+    print(f"Readout check: videos={len(X)}, splits={len(train_indices)}/{len(val_indices)}/{len(test_indices)}",
+          flush=True)
+    reports = {}
+    for name, model in models.items():
+        print(f"\n{name}: checking w_out with {model.w_out.in_features} features...", flush=True)
+        report = check_readout_optimization(
+            model, X_train, y_train, training.BATCH_SIZE, training.EPOCHS,
+            training.LEARNING_RATE, training.ADAM_BETAS, training.ADAM_EPS, training.SEED
+        )
+        report["validation"] = evaluate(model, [X[i] for i in val_indices],
+                                        [y[i] for i in val_indices], training.BATCH_SIZE)
+        report["test"] = evaluate(model, [X[i] for i in test_indices],
+                                  [y[i] for i in test_indices], training.BATCH_SIZE)
+        reports[name] = report
+        print(f"  Training MSE: {report['mse_before']:.6g} -> {report['mse_after']:.6g}; "
+              f"mean-target baseline: {report['mean_baseline_mse']:.6g}")
+        print(f"  w_out changes: weight={report['weight_change']:.6g}, bias={report['bias_change']:.6g}")
+        print(f"  Readout trainable: {report['readout_trainable']}; "
+              f"fixed parameters unchanged: {report['fixed_parameters_unchanged']}")
+        print(f"  Validation MSE: {report['validation']['loss']:.6g}; test MSE: {report['test']['loss']:.6g}")
+        print(f"  Optimization check: {'PASS' if report['passed'] else 'FAIL'}", flush=True)
+    if not all(report["passed"] for report in reports.values()):
+        raise RuntimeError("Readout check failed; inspect loss and parameter changes above.")
+    return reports
+
+
+if __name__ == "__main__":
+    main()

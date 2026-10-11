@@ -11,13 +11,71 @@ import unittest
 from unittest.mock import patch
 
 import numpy as np
+import torch
 
 import main as training
-from utils import make_loader, predict, reservoir_features
+from reservoirs import ESNReservoir, QiskitQuantumReservoir, check_readout_optimization
+from utils import cached_metrics, make_loader, predict, reservoir_features, train_readout
 from video_data import load_videos, split_video_indices
 
 
 class TrainingExportTests(unittest.TestCase):
+    def test_readout_diagnostic_checks_both_reservoirs(self):
+        """Verify the diagnostic confirms changed readouts and fixed reservoirs."""
+        # Independent decisions and unequal lengths exercise the real fitting path.
+        rng = np.random.default_rng(49)
+        X = [rng.normal(size=(t, 2)).astype(np.float32) for t in (2, 4, 3)]
+        y = [rng.normal(size=(len(v), 3)).astype(np.float32) for v in X]
+        models = [ESNReservoir(dict(input_dim=2, output_dim=3, reservoir_size=4)),
+                  QiskitQuantumReservoir(2, 3, 2, damping=0.2)]
+        for model in models:
+            with self.subTest(model=type(model).__name__):
+                report = check_readout_optimization(model, X, y, batch_size=2, epochs=40, learning_rate=0.01)
+                self.assertTrue(report["passed"])
+                self.assertTrue(report["fixed_parameters_unchanged"])
+                self.assertGreater(report["weight_change"], 0)
+                self.assertGreater(report["bias_change"], 0)
+                self.assertLess(report["mse_after"], report["mse_before"])
+
+    def test_readout_diagnostic_detects_missing_fit(self):
+        """Reject a fitting function that leaves the random readout untouched."""
+        # A negative control proves PASS is more than a requires_grad check.
+        model = ESNReservoir(dict(input_dim=2, output_dim=3, reservoir_size=4))
+        X, y = np.zeros((2, 3, 2), dtype=np.float32), np.full((2, 3, 3), 10, dtype=np.float32)
+        with patch("utils.train_epoch"):
+            report = check_readout_optimization(model, X, y)
+        self.assertFalse(report["passed"])
+        self.assertEqual(report["weight_change"], 0)
+        self.assertEqual(report["bias_change"], 0)
+
+    def test_adam_history_and_validation_selection(self):
+        """Check genuine Adam updates, fixed reservoirs, and best-epoch restoration."""
+        # Constant features and opposing targets make held-out selection observable.
+        torch.manual_seed(42)
+        model = ESNReservoir(dict(input_dim=2, output_dim=1, reservoir_size=4))
+        with torch.no_grad():
+            model.w_out.weight.zero_()
+            model.w_out.bias.zero_()
+        original = {key: value.clone() for key, value in model.state_dict().items()}
+        features = torch.ones(20, 4)
+        train = torch.utils.data.DataLoader(
+            torch.utils.data.TensorDataset(features, torch.ones(20, 1)), batch_size=5
+        )
+        validation = torch.utils.data.DataLoader(
+            torch.utils.data.TensorDataset(features, -torch.ones(20, 1)), batch_size=7
+        )
+        fitted = train_readout(model, train, validation, epochs=8,
+                              learning_rate=0.01, verbose=False)
+        history = fitted["history"]
+        self.assertEqual(history["epoch"], list(range(9)))
+        self.assertLess(history["train_loss"][-1], history["train_loss"][0])
+        self.assertGreater(history["val_loss"][-1], history["val_loss"][0])
+        self.assertEqual(fitted["best_epoch"], 0)
+        self.assertEqual(fitted["validation"]["loss"], min(history["val_loss"]))
+        self.assertEqual(cached_metrics(model, validation), fitted["validation"])
+        for key, value in original.items():
+            self.assertTrue(torch.equal(value, model.state_dict()[key]))
+
     def test_train_export_and_evaluate_without_training_dependencies(self):
         """Check training exports reproduce predictions in a NumPy-only interpreter."""
         rng = np.random.default_rng(19)
@@ -55,8 +113,9 @@ class TrainingExportTests(unittest.TestCase):
                     "targets": [[list(range(len(v))), v.tolist()] for v in y],
                 }, output)
             with patch.multiple(training, RESULTS_DIR=results_dir, BATCH_SIZE=5,
-                                ESN_SIZE=4, NUM_QUBITS=2, hz=0.7, Jz=1.2,
-                                LEAK_RATE=0.2, RIDGE=0.0, DATASET_PATH=dataset_path), \
+                                ESN_SIZE=4, NUM_QUBITS=2, HZ=0.7, JZ=1.2,
+                                TIME_STEP=1, SPECTRAL_RADIUS=0.9,
+                                LEAK_RATE=0.2, EPOCHS=8, LEARNING_RATE=0.01, DATASET_PATH=dataset_path), \
                     contextlib.redirect_stdout(io.StringIO()):
                 models, metrics = training.main() if from_file else training.main(X, y)
 
@@ -64,7 +123,10 @@ class TrainingExportTests(unittest.TestCase):
             X_test, y_test = [X[i] for i in test_indices], [y[i] for i in test_indices]
             all_indices = np.concatenate([train_indices, val_indices, test_indices])
             np.testing.assert_array_equal(np.sort(all_indices), np.arange(len(X)))
-            settings = {"num_qubits": 2, "hz": 0.7, "Jz": 1.2, "leak_rate": 0.2}
+            settings = {"num_qubits": 2, "hz": 0.7, "Jz": 1.2, "leak_rate": 0.2,
+                        "optimizer": "Adam", "epochs": 8, "learning_rate": 0.01,
+                        "adam_betas": list(training.ADAM_BETAS), "adam_eps": training.ADAM_EPS,
+                        "batch_size": 5, "seed": training.SEED}
             esn_dir = results_dir / "results_size_4_leak_rate_0.2"
             quantum_dir = results_dir / "results_n_2_hz_0.7_jz_1.2_leak_rate_0.2"
             self.assertEqual(set(results_dir.iterdir()), {esn_dir, quantum_dir})
@@ -89,7 +151,7 @@ class TrainingExportTests(unittest.TestCase):
                     metadata = json.loads(archive["metadata"].item())
                     self.assertEqual(metadata["hyperparameters"], settings)
                     for key, value in settings.items():
-                        self.assertEqual(archive[key].item(), value)
+                        self.assertEqual(archive[key].tolist(), value)
                     config = metadata["model_config"]
                     if name == "ESN":
                         self.assertEqual(config["leak_rate"], settings["leak_rate"])
@@ -100,15 +162,12 @@ class TrainingExportTests(unittest.TestCase):
                     for key in ("w_in.weight", "w_in.bias", "w_out.weight", "w_out.bias",
                                 "w_res" if name == "ESN" else "J"):
                         np.testing.assert_array_equal(archive[key], model.state_dict()[key].numpy())
-                # Check that the exported readout solves the training objective.
+                # Final metrics must describe the validation-selected exported weights.
+                self.assertIn(saved_results["best_epoch"], range(9))
                 cached = reservoir_features(
-                    model, make_loader([X[i] for i in train_indices], [y[i] for i in train_indices], 5), 5
-                ).dataset.tensors
-                features, targets = (value.numpy().astype(np.float64) for value in cached)
-                residual = (features @ model.w_out.weight.detach().numpy().T
-                            + model.w_out.bias.detach().numpy() - targets)
-                np.testing.assert_allclose(features.T @ residual, 0, atol=1e-4)
-                np.testing.assert_allclose(residual.sum(axis=0), 0, atol=1e-4)
+                    model, make_loader([X[i] for i in val_indices], [y[i] for i in val_indices], 5), 5
+                )
+                self.assertEqual(cached_metrics(model, cached), metrics[original_name]["validation"])
 
             # An isolated interpreter proves inference never imports Torch/Qiskit.
             script = '''

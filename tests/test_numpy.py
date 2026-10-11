@@ -6,7 +6,7 @@ from pathlib import Path
 import numpy as np
 
 from reservoirs_numpy import ESNReservoir, QuantumReservoir, load_model
-from utils_numpy import evaluate, fit_readout, make_synthetic_dataset, predict, reservoir_features
+from utils_numpy import evaluate, make_synthetic_dataset, predict, reservoir_features
 
 
 class NumpyReservoirTests(unittest.TestCase):
@@ -87,20 +87,16 @@ class NumpyReservoirTests(unittest.TestCase):
         model.initialize(2)
         np.testing.assert_allclose(model(X), first, atol=1e-12)
 
-    def test_optimal_readout_and_ridge_stationarity(self):
-        """Check least-squares and ridge solutions satisfy their normal equations."""
-        # The weight gradient includes the ridge penalty; the bias stays unpenalized.
-        model = self.models()[0]
+    def test_readout_is_affine_matrix_multiplication(self):
+        """Check NumPy readouts use the loaded weights and bias directly."""
+        # Arbitrary edited weights detect accidental reinitialization during inference.
         rng = np.random.default_rng(3)
-        features = rng.normal(size=(50, model.w_out.weight.shape[1]))
-        targets = rng.normal(size=(50, model.output_dim))
-        for ridge in (0, 0.4):
-            fit_readout(model, features, targets, ridge=ridge)
-            residual = model.readout(features) - targets
-            np.testing.assert_allclose(
-                features.T @ residual + ridge * model.w_out.weight.T, 0, atol=1e-12
-            )
-            np.testing.assert_allclose(residual.sum(axis=0), 0, atol=1e-12)
+        for model in self.models():
+            model.w_out.weight[:] = rng.normal(size=model.w_out.weight.shape)
+            model.w_out.bias[:] = rng.normal(size=model.w_out.bias.shape)
+            features = rng.normal(size=(4, 7, model.w_out.weight.shape[1]))
+            np.testing.assert_allclose(model.readout(features),
+                                       features @ model.w_out.weight.T + model.w_out.bias)
 
     def test_sequence_features_and_metrics(self):
         """Check full-video feature order, prediction shape, and target metrics."""
@@ -157,19 +153,15 @@ class NumpyReservoirTests(unittest.TestCase):
             np.testing.assert_allclose(actual_last[:, :-1], expected[:, :-1], atol=1e-12)
             self.assertGreater(np.max(np.abs(actual_last[:, -1] - expected[:, -1])), 1e-6)
 
-    def test_video_readout_fitting(self):
-        """Check fitting on video features preserves aligned target order."""
-        # The fitted residual must be orthogonal to feature and bias columns.
+    def test_video_features_preserve_prediction_order(self):
+        """Check dense cached features retain the video and frame axes."""
+        # Applying the same readout to cached features must reproduce full inference.
         X = make_synthetic_dataset(10, 5, 2)
-        y = np.random.default_rng(24).normal(size=(10, 5, 3))
         self.assertEqual(X.shape, (10, 5, 2))
         for model in self.models():
             features = reservoir_features(model, X)
-            fit_readout(model, features, y)
-            residual = (model.readout(features) - y).reshape(-1, 3)
-            design = features.reshape(-1, features.shape[-1])
-            np.testing.assert_allclose(design.T @ residual, 0, atol=1e-10)
-            np.testing.assert_allclose(residual.sum(axis=0), 0, atol=1e-10)
+            self.assertEqual(features.shape[:2], X.shape[:2])
+            np.testing.assert_allclose(model.readout(features), predict(model, X), atol=1e-12)
 
     def test_invalid_inputs(self):
         """Check malformed frame batches and videos are rejected."""

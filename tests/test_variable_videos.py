@@ -11,7 +11,7 @@ import numpy as np
 
 import main_numpy
 from reservoirs_numpy import ESNReservoir, QuantumReservoir
-from utils_numpy import evaluate, fit_readout, predict, reservoir_features
+from utils_numpy import evaluate, predict, reservoir_features
 from video_data import frame_metrics, load_dataset, load_videos, save_videos, validate_pairs
 
 
@@ -57,19 +57,16 @@ class VariableVideoTests(unittest.TestCase):
             model.w_out.bias[:] = 0
             self.assertEqual(evaluate(model, X, y), {"loss": 20.0, "mae": 2.0})
 
-    def test_ragged_features_and_readout_fit(self):
-        """Fit aligned variable-length features and check ridge stationarity."""
-        # Concatenate only real frames, preserving feature/target video alignment.
+    def test_ragged_features_preserve_prediction_order(self):
+        """Check cached variable-length features match each video's predictions."""
+        # Concatenate only real frames, preserving the original video order.
         X = self.videos()
-        y = [np.random.default_rng(i).normal(size=(len(v), 3)) for i, v in enumerate(X)]
         for model in self.models():
             features = reservoir_features(model, X, 2)
             self.assertEqual([len(f) for f in features], list(map(len, X)))
-            fit_readout(model, features, y, ridge=0.1)
-            F, Y = np.concatenate(features), np.concatenate(y)
-            residual = model.readout(F) - Y
-            np.testing.assert_allclose(F.T @ residual + 0.1 * model.w_out.weight.T, 0, atol=1e-10)
-            np.testing.assert_allclose(residual.sum(axis=0), 0, atol=1e-10)
+            expected = model.readout(np.concatenate(features))
+            actual = np.concatenate(predict(model, X, 2))
+            np.testing.assert_allclose(actual, expected, atol=1e-12)
 
     def test_dense_and_list_inputs_agree(self):
         """Retain dense-array outputs while accepting equal-length lists too."""

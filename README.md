@@ -74,12 +74,16 @@ models, metrics = train(X, y)
 Calling `train()` without arguments loads `src/dataset/final_dataset.pkl`.
 Set `DATASET_PATH` in `src/main.py` to use another notebook-format pickle.
 The script splits by video into 70% training, 15% validation, and 15% test sets:
-140/30/30 videos for the current dataset. Frames from a video stay in one split.
+For example, 200 videos give 140/30/30. Frames from a video stay in one split.
 
-Only `w_out` and its bias are fitted. Reservoir features and aligned targets are
-concatenated over real training frames, then a float64 least-squares solve fits
-the readout. Set `RIDGE` above zero for regularization. Validation and test
-targets are excluded from fitting.
+Only `w_out` and its bias are trained with Adam, minimizing MSE. Reservoir
+features and aligned targets are cached once per split over real frames.
+Set `EPOCHS`, `LEARNING_RATE`, `ADAM_BETAS`, `ADAM_EPS`, `BATCH_SIZE`, and `SEED`
+at the top of `src/main.py`. Validation and test targets are excluded from updates.
+
+Training prints training/validation MSE and MAE at epoch 0 and after every epoch.
+The weights with the lowest validation MSE are restored before scoring the test
+split once. Epoch 0 can be selected if training does not improve validation MSE.
 
 Source files use plain imports. For interactive calls, add `src/` to your
 Python import path or open your interpreter there. Running `src/main.py` directly
@@ -89,10 +93,10 @@ Training saves two files per model under `src/results/`. With the default settin
 
 ```text
 results/
-  results_size_8_leak_rate_0.3/
+  results_size_100_leak_rate_0.3/
     params.npz
     results.json
-  results_n_3_hz_1.0_jz_10_leak_rate_0.3/
+  results_n_6_hz_1.0_jz_10_leak_rate_0.3/
     params.npz
     results.json
 ```
@@ -102,9 +106,10 @@ configuration. Both checkpoints also retain `num_qubits`, `hz`, `Jz`, and
 `leak_rate` as scalar arrays and in their JSON metadata. Quantum `damping` uses
 `leak_rate`.
 
-Each `results.json` contains `params` (model settings, split seed, and ridge
-strength), plus final `validation` and `test` benchmarks with MSE (`loss`) and
-MAE. Dataset copies, split-index files, and intermediate benchmarks are not saved.
+Each `results.json` contains `params` (model settings, split seed, and Adam
+settings), `best_epoch`, and final `validation` and `test` benchmarks with MSE
+(`loss`) and MAE. Adam settings are also recorded in the checkpoint metadata.
+Only `params.npz` and `results.json` are saved per model.
 
 ## Evaluate with NumPy only
 
@@ -137,8 +142,9 @@ work independently of the current working directory.
 
 Evaluation imports neither PyTorch nor Qiskit. Both NumPy reservoirs accept
 video lists directly through `model(X)`. Use `utils_numpy.predict` for
-batching and `utils_numpy.evaluate(model, X, y)` for metrics. For NumPy
-readout fitting, `reservoir_features` and `fit_readout` also accept video lists.
+batching and `utils_numpy.evaluate(model, X, y)` for metrics.
+`utils_numpy.reservoir_features` also accepts video lists. Training happens in
+`main.py`; NumPy inference applies the exported readout through matrix multiplication.
 
 The quantum reservoir uses NumPy density matrices for input encoding, Ising
 evolution, observable measurement, and damping. State memory scales as
@@ -150,6 +156,28 @@ create the new named results folders and benchmarks. Older runs used a Torch
 shuffle; the recreated NumPy test split applies to new runs.
 
 ## Verification
+
+Open `src/reservoir_training_curves.ipynb` to plot epoch versus MSE and MAE for
+both reservoirs. Install `requirements_notebook.txt` in the notebook environment.
+Its settings cell defines the dataset path, split fractions, seed, batch size,
+Adam settings, and every ESN/quantum constructor hyperparameter. These settings
+are independent of `main.py`; input and output widths come from the dataset.
+It caches reservoir features once and uses the same Adam training function as
+`main.py`. It plots training and validation MSE/MAE, restores the best validation
+epoch, and evaluates the test split once. Histories stay in the notebook.
+
+Run `src/reservoirs.py` in your editor to check whether both `w_out` readouts are
+optimized. It uses the current settings in `main.py`, `final_dataset.pkl`, and
+the same video split, without saving checkpoints or results. It prints:
+
+- Training MSE before/after fitting and a mean-target baseline.
+- Changes to readout weights and bias; whether fixed reservoir parameters stayed unchanged.
+- Whether Adam reduced training MSE and changed the readout parameters.
+- Validation/test MSE and PASS/FAIL for each readout.
+
+Both models train their readout with Adam. PASS confirms parameter updates and
+reduced training MSE while preserving the fixed reservoir. It does not guarantee
+convergence; validation/test metrics measure performance on unseen videos.
 
 From the project root, run `python -m unittest tests.test_numpy tests.test_variable_videos`
 in a NumPy-only environment. In a training environment, also run
