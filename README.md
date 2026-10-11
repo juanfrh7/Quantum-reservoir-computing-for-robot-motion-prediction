@@ -97,16 +97,16 @@ All files sit together at the top level of the Qollab project. Everything here r
 | File | What it does |
 |---|---|
 | `main.py` | Qollab entry point: replays one held-out demonstration with the trained 6-qubit policy, first by exact simulation, then as circuits on the selected backend |
-| `lift_policy.npz` | the trained policy (input weights, couplings, damping, readout) and the demonstration it replays |
-| `train_readout.py` | trains that policy from the 6-qubit reservoir of `sweep.py`, with a readout made robust to measurement shot noise, and saves `lift_policy.npz` |
-| `sweep.py` | trains the classical and quantum reservoir readouts at every size; resumable, results go to `results.json` |
-| `results.json` | scores of every readout trained by the sweep |
-| `reservoirs.py` | the ESN and density-matrix quantum reservoir models, in NumPy |
-| `utils.py` | feature extraction, prediction and metrics, in NumPy |
-| `video_data.py` | loading, validation, batching and metrics for the demonstration data |
-| `final_dataset.pkl` | the prepared robomimic Lift demonstrations |
-| `requirements.txt` | what Qollab installs: Qiskit and NumPy |
-| `README.md` | this write-up, shown on the Project Card |
+| `lift_policy.npz` | The trained policy (input weights, couplings, damping, readout) and the demonstration it replays |
+| `train_readout.py` | Trains that policy from the 6-qubit reservoir of `sweep.py`, with a readout made robust to measurement shot noise, and saves `lift_policy.npz` |
+| `sweep.py` | Trains the classical and quantum reservoir readouts at every size; resumable, results go to `results.json` |
+| `results.json` | Scores of every readout trained by the sweep |
+| `reservoirs.py` | The ESN and density-matrix quantum reservoir models, in NumPy |
+| `utils.py` | Feature extraction, prediction and metrics, in NumPy |
+| `video_data.py` | Loading, validation, batching and metrics for the demonstration data |
+| `final_dataset.pkl` | The prepared robomimic Lift demonstrations |
+| `requirements.txt` | What Qollab installs: Qiskit and NumPy |
+| `README.md` | This write-up, shown on the Project Card |
 
 ## Reproduce it
 
