@@ -5,6 +5,10 @@ benchmarked against classical baselines on a robot manipulation task, and the tr
 Qiskit circuits on Qollab's simulators. Press **Run** to replay a held-out human demonstration through the
 trained controller; *How to run it* and *What to expect* below explain the output.
 
+Everything here is offline prediction: the controller is scored on how closely it reproduces a human
+operator's recorded actions from the recorded observations. It was not run in the robot simulator, so its
+predictions never change what it sees next, and nothing here shows that it lifts the cube.
+
 **Team:** Marcus Demierre, Juan Rodriguez Hernandez and Krystifer Campos.
 
 This effort is supported by Qollab & IonQ.
@@ -23,7 +27,7 @@ We use the **Lift** task from the robomimic benchmark, where a Franka Panda robo
 
 ### Why quantum reservoirs for this dataset?
 
-This task is a natural fit for reservoir computing. The right action depends not just on the current state but on where we are in the motion (approaching, grasping or lifting), so the model needs memory. The mapping is also partly nonlinear: the gripper command, for example, flips suddenly from "open" to "close" once the gripper reaches the cube, a jump that a weighted sum of the inputs can't reproduce. And with only 19 inputs, the problem is small enough to encode into a few qubits, which makes it a realistic target for today's quantum hardware.
+This task is a natural fit for reservoir computing. The right action depends not just on the current state but on where we are in the motion (approaching, grasping or lifting), so temporal context may help. The mapping is also partly nonlinear: the gripper command, for example, flips suddenly from "open" to "close" once the gripper reaches the cube, a jump that a weighted sum of the inputs can't reproduce. And with only 19 inputs, the problem is small enough to encode into a few qubits, which makes it a manageable proof of concept for quantum-circuit simulation.
 
 ### The reservoirs and the readout
 
@@ -31,7 +35,8 @@ At every time step of a demonstration, the quantum reservoir does this:
 
 1. The 19 observations are standardised and projected to one rotation angle per qubit (RY).
 2. Every qubit gets an RZ rotation, and every pair of qubits an XX rotation with a fixed random strength.
-3. Every qubit loses a fraction 0.3 of its excitation (amplitude damping), which makes old inputs fade.
+3. Every qubit loses a fraction 0.3 of its excitation (amplitude damping), which makes old inputs fade. The
+   damping is built into the circuit with ancilla qubits; it is a design choice, not a model of hardware noise.
 4. The averages of Z and X on every qubit, and of ZZ and XX on every pair, are the features for the readout.
 
 The state is carried from one time step to the next within a demonstration. The classical reservoir is a
@@ -67,11 +72,12 @@ observation gives 0.0448.
 - The quantum reservoir improves steadily with size and reaches the linear model at 10 to 12 qubits.
 - The 100-node classical reservoir is clearly ahead. We found no quantum advantage on this task.
 - The policy in the Qollab demo gives its readout the current observation as well as the reservoir's
-  features. That lowers the linear model's 0.0448 to 0.0408. Trained to tolerate measurement noise it scores
-  0.0430, and 0.0439 when its features are measured with 1,000 shots.
+  features. That lowers the linear model's 0.0448 to 0.0408. Trained on features with simulated measurement
+  noise it scores 0.0430, and 0.0439 when that noise is also added to the test features. The noise is an
+  independent Gaussian approximation to 1,000 shots; no circuits were run for these two numbers.
 
-Limits of these numbers: one random reservoir per size and 15 test demonstrations, so small gaps between rows
-are within noise. The Adam readout has not fully converged for the quantum reservoirs. The error is measured
+Limits of these numbers: one random reservoir per size and 15 test demonstrations, so the significance of
+small gaps between rows has not been established. The Adam readout has not fully converged for the quantum reservoirs. The error is measured
 against the human's actions; the policy was not run in the robot simulator, so there is no success rate.
 
 ## Repository structure
@@ -133,7 +139,7 @@ installed or configured. The Run settings are optional:
 
 | Setting | Default | What it does |
 |---|---|---|
-| `shots` | 500 | how many times each circuit is run |
+| `shots` | 500 | how many times each circuit is run; the readout was trained for the noise of 1,000 shots |
 | `replay` | 6 | how many past frames each circuit replays to rebuild the reservoir's memory (2 on IonQ backends) |
 | `every` | 8 | every 8th frame of the demonstration is measured on the backend |
 | `retrain` | off | also trains the reservoirs and the policy again inside the run |
@@ -204,14 +210,14 @@ The `measured` column and the `Measured vs exact` line change from run to run, b
 
 | Output | What it means |
 |---|---|
-| `Exact reservoir policy vs expert ...` | the policy, simulated exactly, against the human on this demonstration. Commands run from −1 to 1, so it is off by about 0.11 on average |
+| `Exact reservoir policy vs expert ...` | the policy, simulated exactly, against the human on this demonstration, which is the held-out demonstration with the median error. Commands run from −1 to 1, so it is off by about 0.11 on average |
 | `Running 12 circuits of 7 qubits ...` | six frames are measured, each with one circuit in the Z basis and one in the X basis. A circuit has the 6 reservoir qubits and one ancilla for the damping |
 | `expert` | what the human did; `move z` is up and down, and for `gripper` −1 is open and +1 is closed |
 | `exact` | the policy, simulated exactly with the full history |
 | `same circuit` | an exact simulation of the shortened circuit that was sent |
 | `measured` | the policy recomputed from the counts measured on the backend |
-| `Measured vs exact simulation of the same circuits ...` | how far the backend is from theory, which is shot noise only |
-| `Replaying 6 frames vs the full history ...` | what is lost by replaying only the last frames: nothing visible |
+| `Measured vs exact simulation of the same circuits ...` | how far the backend is from an exact simulation. On the Built-in simulator that is shot noise only; the IonQ simulators also apply a noise model of the device |
+| `Replaying 6 frames vs the full history ...` | what is lost by replaying only the last 6 frames: about 0.00003 for the frames of this demonstration, which prints as 0.0000 |
 | `Benchmark. What was run ...` | the settings of the offline benchmark, printed from `src/sweep.py` itself |
 | `What it gave (stored results) ...` | the stored benchmark: the Results table with MAE, the selected epoch or ridge strength, and the offline run time |
 
@@ -221,9 +227,11 @@ lower half is the size-sweep figure of the Results section.
 
 ![Upper half of the figure of a default run on the Built-in simulator](src/results/qollab_run.png)
 
-On an IonQ simulator the run sends one circuit of 24 qubits, because IonQ backends have no reset and take one
-job per run. The table then has one frame (frame 31), each panel has one orange dot, and the last line reads
-`Replaying 2 frames vs the full history, mean squared difference: 0.0016`. The job took 39 seconds in our run.
+On an IonQ simulator the run sends a single circuit of 24 qubits that uses fresh ancillas in place of reset,
+because those backends accept one job per run. The table then has one frame (frame 31), each panel has one
+orange dot, and the last line reads `Replaying 2 frames vs the full history, mean squared difference: 0.0016`.
+We ran it on the IonQ Forte 1 simulator, which applies IonQ's noise model of that device: the job took 39
+seconds, and `Measured vs exact` read 0.0012 and 0.0031 in two runs.
 
 With `retrain` ticked the run also prints `Retraining 6 reservoirs now ...` with the seconds per reservoir
 (about 7 seconds in total up to 6 qubits), the results table again for the retrained models, and
@@ -259,25 +267,27 @@ observation + reservoir features, trained with noise       61       1     0.0430
 Saved lift_policy.npz: readout weights up to 0.99, a demonstration of 53 frames to replay
 ```
 
-The last row is the policy that Qollab runs.
+The last row is the policy that Qollab runs. The column `at 1000 shots` is the test loss with simulated
+measurement noise added to the features, not a measurement of circuits.
 
 On a laptop the benchmark took 1 to 3 seconds per reservoir up to 6 qubits, 22 seconds for 8 qubits, about
 5 minutes for 10 and 88 minutes for 12. `train_readout.py`, `main_numpy.py` and the unit tests finish in
 seconds.
 
 `src/main.py` has its own settings at the top of the file, and they differ from the benchmark's: 100 epochs,
-spectral radius 0.9 and Jz = 10, against 200, 1.0 and 3. Its scores therefore differ from the Results table.
-With those defaults it gave us a test loss of 0.0580 for the 100-node classical reservoir and 0.1649 for the
-6-qubit quantum reservoir.
+spectral radius 0.9 and Jz = 10, against 200, 1.0 and 3. Its scores will therefore not be the rows of the
+Results table.
 
 ## How it was checked
 
 - The simulation in `sweep.py` gives the same features as `reservoirs_numpy.QuantumReservoir` to 13 decimal
-  places, and the same test scores as a parameter file exported by `src/main.py` to 9 decimal places.
+  places, and the same test scores as a parameter file exported by an earlier version of `src/main.py` to 9 decimal
+  places.
 - The fast simulation in `scaling_tuned.py` gives the same results as the Qiskit reservoir in
   `src/reservoirs.py` to 7 decimal places on a reduced run.
 - On Qollab, the actions recomputed from measured counts match an exact simulation of the same circuits to a
-  mean squared difference of 0.001 to 0.003 at 500 shots, on the Built-in simulator and on an IonQ simulator.
+  mean squared difference of 0.001 to 0.003 at 500 shots, on the Built-in simulator and on the IonQ Forte 1
+  simulator, which includes IonQ's noise model.
 - Retraining inside a Qollab run (up to 6 qubits) gives the stored test scores back to within 1e-15.
 - `python -m unittest tests.test_numpy tests.test_variable_videos` runs the NumPy tests from the top folder.
 
@@ -703,5 +713,3 @@ and separate inference processes with Torch/Qiskit imports blocked.
 
 
 The code is released under the MIT licence (see `LICENSE`).
-
-
