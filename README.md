@@ -1,8 +1,8 @@
 # Documentation
 
-# 1. Input Data
+## 1. Input Data
 
-## 1.1 Source: robomimic Lift (Proficient-Human), `low_dim_v15.hdf5`
+### 1.1 Source: robomimic Lift (Proficient-Human), `low_dim_v15.hdf5`
 
 The data comes from robomimic, a framework and benchmark for robot learning from demonstration developed by the Stanford Vision and Learning Lab as part of the ARISE Initiative. robomimic is released under the MIT License (Copyright © 2021 Stanford Vision and Learning Lab).
 
@@ -21,7 +21,7 @@ The data comes from robomimic, a framework and benchmark for robot learning from
 
 **Version note.** The demonstrations were recorded in the robosuite simulator (MuJoCo physics), environment version 1.5.1, as stored in the file's env_args metadata. This is why the file is named `low_dim_v15.hdf5` rather than the `low_dim_v141.hdf5` listed on the v0.3 documentation page. Neither robomimic nor robosuite is a runtime dependency of this project: they were used only to obtain and inspect the original file, and the pipeline reads it directly with h5py.
 
-## 1.2 The task
+### 1.2 The task
 
 At the start of each episode the cube is placed at a slightly randomized position on the table. The operator moves the end effector (the gripper) above the cube, descends, closes the gripper, and lifts the cube. An episode counts as successful once the cube is raised above a height threshold.
 
@@ -29,7 +29,7 @@ At the start of each episode the cube is placed at a slightly randomized positio
 - **Controller:** Operational Space Control (`OSC_POSE`) in **delta** mode. Each action is a small displacement and rotation of the end effector relative to its current pose, not an absolute target.
 - **Reward:** sparse. The reward is 1 only while the cube is lifted. Every demo ends with 5–6 such success steps (`rewards` and `dones` sum to 5 or 6 per demo).
 
-## 1.3 Original file structure (HDF5)
+### 1.3 Original file structure (HDF5)
 
 Besides arrays, HDF5 groups can carry small **metadata attributes** (marked "metadata:" in the tree). They describe the group itself rather than holding training data. This project only reads `env_args`, to confirm the task is `"Lift"`.
 
@@ -85,9 +85,9 @@ Dataset-wide statistics:
 
 > **Ordering.** HDF5 lists keys alphabetically (`demo_1, demo_10, demo_100, demo_101, …`), which is the order in the listing above. The loading notebook re-sorts the demos numerically (`demo_0, demo_1, demo_2, …`).
 
-## 1.4 Variables used
+### 1.4 Variables used
 
-### Inputs: 19 features per time step (robot and object state)
+#### Inputs: 19 features per time step (robot and object state)
 
 | HDF5 key | Dim | Column names | Meaning |
 |---|---|---|---|
@@ -98,7 +98,7 @@ Dataset-wide statistics:
 | `object[3:7]` | 4 | `cube_qx, cube_qy, cube_qz, cube_qw` | Cube orientation as a quaternion |
 | `object[7:10]` | 3 | `grip2cube_x, grip2cube_y, grip2cube_z` | Relative vector from the gripper to the cube. Checked numerically to equal `cube_pos − eef_pos` exactly |
 
-### Targets: 7 values per time step (the operator's action)
+#### Targets: 7 values per time step (the operator's action)
 
 | Column | Meaning | Range in the data |
 |---|---|---|
@@ -110,11 +110,11 @@ The learning problem is therefore **behavior cloning as sequence regression**: g
 
 **Redundancy note.** Some inputs are redundant: `grip2cube_*` is an exact linear combination of `cube_*` and `eef_*`, and the two finger coordinates are nearly mirror images, this means the 19 inputs carry fewer than 19 independent degrees of freedom. 
 
-## 1.5 From HDF5 to nested lists (`dataset_generation.ipynb`)
+### 1.5 From HDF5 to nested lists (`dataset_generation.ipynb`)
 
 The notebook `dataset_generation.ipynb` converts the HDF5 file into plain Python nested lists. It does **no padding and no masking**: every demo keeps its own length. Required packages: `h5py`, `numpy`, `pandas`.
 
-### Settings
+#### Settings
 
 | Setting | Default | Effect |
 |---|---|---|
@@ -125,11 +125,11 @@ The notebook `dataset_generation.ipynb` converts the HDF5 file into plain Python
 | `TIME_STARTS_AT` | `1` | Time steps are numbered 1, 2, …, T (set to 0 for 0-based numbering) |
 | `STATE_KEYS` | `eef_pos, eef_quat, gripper_qpos, object` | Observation groups concatenated into the 19 inputs, in this order |
 
-### What the notebook `dataset_generation.ipynb` does
+#### What the notebook `dataset_generation.ipynb` does
 
 The notebook opens the HDF5 file, checks that it contains the Lift task, and selects which demos to load (by default all 200, in numeric order). For each demo it joins the four observation groups into one table of 19 input values per time step and takes the 7 action values as targets. Inputs and targets are paired at the same time step: the input is the state the operator saw, and the target is the action they then issued. It then checks that every demo is consistent (matching lengths, 19 inputs and 7 targets per step, no missing values) and saves the result, together with the column names and demo names, to a pickle file (`~/ionQ/lift_lists.pkl` by default).
 
-### Resulting structure
+#### Resulting structure
 
 ```
 inputs  = [video_1, video_2, ..., video_N]        # one element per demo (N = 200)
@@ -155,7 +155,7 @@ inputs : [-0.0905, -0.0152, 1.0118, 0.9972, -0.0072, 0.0740, 0.0019, 0.0208, -0.
 targets: [-0.0, 0.0, 0.0, 0.0038, 0.1482, 0.0145, -1.0]
 ```
 
-## 1.6 Licensing
+### 1.6 Licensing
 
 | Component | Role in this project | License |
 |---|---|---|
@@ -163,7 +163,7 @@ targets: [-0.0, 0.0, 0.0, 0.0038, 0.1482, 0.0145, -1.0]
 | robosuite (ARISE-Initiative/robosuite) | Simulator that generated the demonstrations | MIT |
 
 
-## 2.Video inputs and decision targets
+## 2. Video inputs and decision targets
 
 Videos can have different frame counts. Pass them as lists of NumPy arrays:
 
