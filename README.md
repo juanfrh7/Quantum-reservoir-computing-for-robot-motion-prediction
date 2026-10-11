@@ -42,7 +42,7 @@ source HDF5 dataset. It contains:
 `video_data.load_dataset` extracts each video's numeric value matrices and
 checks matching time steps. The time-step lists are metadata, not model inputs.
 Video counts, frame counts, and vector widths come from the saved dataset.
-The entry points print these dimensions when loading it.
+Training prints these dimensions when loading it.
 
 For other datasets, the utility functions also support `.npz` archives with one numeric array per video,
 keyed `video_000000`, `video_000001`, and so on. They load without pickle:
@@ -80,6 +80,11 @@ Only `w_out` and its bias are trained with Adam, minimizing MSE. Reservoir
 features and aligned targets are cached once per split over real frames.
 Set `EPOCHS`, `LEARNING_RATE`, `ADAM_BETAS`, `ADAM_EPS`, `BATCH_SIZE`, and `SEED`
 at the top of `src/main.py`. Validation and test targets are excluded from updates.
+
+`loss` means mean squared error: the average of `(prediction - target)**2`.
+MAE is the average absolute error and is reported alongside the loss; Adam
+optimizes MSE. Both metrics compare predictions with the imported decision
+targets at the same frame, in their original units.
 
 Inputs are standardized per feature using the mean and standard deviation of
 real training frames only. Constant features use a scale of 1. Both reservoirs
@@ -168,9 +173,67 @@ Existing model `.npz` checkpoints remain compatible. Run training again to
 create the named checkpoints and shared benchmarks. Older runs used a Torch
 shuffle; the recreated NumPy test split applies to new runs.
 
+## Reservoir state and streaming
+
+Each batch row has its own reservoir state. For a batch of complete videos,
+state is initialized once before the first frame, carried through all frames
+and internal steps, then cleared when the call finishes. It is never reset
+between frames or predictions within that video. Independent videos start
+from fresh states.
+
+Training computes these sequences once when caching reservoir features.
+Subsequent Adam batches and epochs update the readout using the cached features;
+they do not rerun or reset the reservoir dynamics.
+
+For streaming, call a loaded model with one frame per stream, shaped
+`(batch_size, features)`:
+
+```python
+from reservoirs_numpy import load_model
+from main_numpy import ESN_PARAMS
+
+model = load_model(ESN_PARAMS)  # The same interface works for a quantum checkpoint.
+model.initialize(len(X))       # X is a dense (N, T, features) array here.
+for t in range(X.shape[1]):
+    prediction = model(X[:, t, :])  # Shape: (N, decision_vector); state persists.
+```
+
+Keep the batch size and stream order fixed until calling `initialize` for new
+videos. Passing `(N, 1, features)` instead invokes complete-video evaluation
+and starts fresh state on every call. These state rules apply to both the
+training and NumPy reservoir implementations.
+
+## Proposed reservoir feature normalization
+
+The current implementation standardizes **inputs**, as described above.
+It does not yet standardize the measured quantum features or the ESN states
+before the readout. Quantum observables lie in `[-1, 1]`, but their variances
+can differ substantially, which can make Adam optimization uneven.
+
+An optional improvement is to standardize each reservoir feature using mean
+and standard deviation fitted on actual training frames only. Use those frozen
+statistics for validation, test, and streaming, with a scale of 1 for nearly
+constant features. Apply this after measurement and before `w_out`, so it
+does not change reservoir evolution or memory. Compare enabled and disabled
+normalization for both models; it may help optimization but adds no information
+to the features.
+
+If implemented, normalization can be folded into the exported readout. For a
+trained weight matrix `W` shaped `(decisions, reservoir_features)`:
+
+```python
+W_export = W / feature_std[None, :]
+b_export = b - W_export @ feature_mean
+# Inference on unnormalized reservoir features:
+prediction = features @ W_export.T + b_export
+```
+
+This would preserve NumPy inference through matrix multiplication and bias
+addition. These readout transformations are a proposal, not current behavior.
+
 ## Verification
 
-Open `src/reservoir_training_curves.ipynb` to plot epoch versus MSE and MAE for
+Open `src/reservoir_training.ipynb` to plot epoch versus MSE and MAE for
 both reservoirs. Install `requirements_notebook.txt` in the notebook environment.
 Its settings cell defines the dataset path, split fractions, seed, batch size,
 Adam settings, and every ESN/quantum constructor hyperparameter. These settings
