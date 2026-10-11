@@ -692,14 +692,16 @@ and separate inference processes with Torch/Qiskit imports blocked.
 
 ## Credits and disclosure
 
-- **Data:** the Lift demonstrations come from robomimic (Mandlekar et al., CoRL 2021; reference and licences
-  under *Input Data* above), recorded in the robosuite simulator. `src/dataset/final_dataset.pkl` and the
-  demonstration inside `lift_policy.npz` are derived from that data.
-- **Libraries:** Qiskit, NumPy, Matplotlib and PyTorch; h5py and pandas for the dataset notebook.
-- **Background:** quantum reservoir computing was introduced by Fujii and Nakajima, "Harnessing
+- **Data:** the Lift demonstrations were recorded in the robosuite simulator and published as part of robomimic (Mandlekar et al., CoRL 2021). `final_dataset.pkl` and the demonstration stored in `lift_policy.npz` are derived from them. See *Input Data* above for the full reference and licences.
+- **Libraries:** Qiskit, NumPy, Matplotlib and PyTorch.
+- **Background:** Quantum reservoir computing was introduced by Fujii and Nakajima, "Harnessing
   Disordered-Ensemble Quantum Dynamics for Machine Learning", Phys. Rev. Applied 8, 024030 (2017).
-- **AI assistance:** code and analysis were developed with the help of AI assistants (Claude and ChatGPT).
-  The team ran and checked the results.
-- **Build window:** all code here was written during the hackathon, 9 to 11 October 2026.
+- **AI assistance:** AI tools (Claude and ChatGPT) helped write and debug code and draft parts of this
+  write-up. The team designed the project, ran every experiment and checked the results.
+- **Build window:** All code here was written during the hackathon, 9 to 11 October 2026. 
+
+
 
 The code is released under the MIT licence (see `LICENSE`).
+
+
